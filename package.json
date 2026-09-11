@@ -1,8 +1,8 @@
 {
   "name": "pipulse",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "PiPulse — Your server. One pulse. Raspberry Pi home-server monitoring dashboard.",
+  "description": "PiPulse \u2014 Your server. One pulse. Raspberry Pi home-server monitoring dashboard.",
   "scripts": {
     "dev:backend": "npm --workspace backend run dev",
     "dev:frontend": "npm --workspace frontend run dev",

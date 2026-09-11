@@ -25,7 +25,7 @@ const requireAuth = (req: express.Request, res: express.Response, next: express.
 };
 
 // Health (public)
-app.get('/health', (_req, res) => res.json({ status: 'ok', version: '0.1.0' }));
+app.get('/health', (_req, res) => res.json({ status: 'ok', version: '0.2.0' }));
 app.get('/api/health', (_req, res) => {
   let database = 'ok';
   try { openDb(config.dataDir).prepare('SELECT 1').get(); } catch { database = 'error'; }

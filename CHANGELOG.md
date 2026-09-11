@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 (2026-09-11)
 - Notifications: generic webhook + SMTP email (stdlib-only client, STARTTLS/AUTH
   LOGIN), per-severity event selection, test buttons, delivery log, hourly retry
   on failure, resolved notices. Nothing sends in demo mode.
