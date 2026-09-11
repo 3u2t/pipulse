@@ -4,7 +4,7 @@ bin/
 *.db
 *.db-journal
 .env
-data/
-config/
-logs/
+/data/
+/config/
+/logs/
 .DS_Store
