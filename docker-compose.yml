@@ -1,0 +1,52 @@
+services:
+  pipulse:
+    build: .
+    image: pipulse:latest
+    container_name: pipulse
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:8080"
+    volumes:
+      - /DATA/AppData/pipulse/data:/app/data
+      - /DATA/AppData/pipulse/config:/app/config
+      - /DATA/AppData/pipulse/logs:/app/logs
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    # If the Docker page says "unavailable" while the socket is mounted, the
+    # container user can't read it. Least-privilege fix (do NOT use privileged):
+    # look up the gid with `stat -c %g /var/run/docker.sock` on the host and add:
+    #   group_add:
+    #     - "<that-gid>"
+    # SMART (optional, container path only): map the drive(s). The recommended
+    # path needs none of this — the host agent reads SMART as root instead.
+    # See docs/smart.md. Never use --privileged for this.
+    # devices:
+    #   - "/dev/sda:/dev/sda"   # USB HDD
+    environment:
+      - PORT=8080
+      - DATA_DIR=/app/data
+      - AGENT_TOKEN=${AGENT_TOKEN:?set AGENT_TOKEN in .env}
+      - SESSION_SECRET=${SESSION_SECRET:?set SESSION_SECRET in .env}
+      - DEMO_MODE=false
+      - MONITOR_INTERVAL_MS=5000
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    x-casaos:
+      id: pipulse
+      title: PiPulse
+      description: Lightweight home-server monitoring for Raspberry Pi and CasaOS.
+      tagline: Your server. One pulse.
+      icon: https://cdn.jsdelivr.net/gh/3u2t/pipulse@main/assets/icon.png
+      category: System
+      main: pipulse
+      webui: "http://[ip]:8080"
+      port: 8080
+      architectures:
+        - arm64
+        - amd64
+      volumes:
+        - /DATA/AppData/pipulse/data:/app/data
+        - /DATA/AppData/pipulse/config:/app/config
+        - /DATA/AppData/pipulse/logs:/app/logs
