@@ -287,6 +287,10 @@ code { font-family: var(--mono); font-size: 0.92em; background: var(--glass-2); 
 .pill-crit { color: var(--crit); border-color: rgba(248, 81, 73, 0.5); background: var(--crit-dim); }
 .pill-mute { color: var(--muted); }
 
+/* ---------- meter bar (endurance etc.) ---------- */
+.meter { height: 8px; border-radius: 5px; background: var(--border-soft); overflow: hidden; margin: 4px 0; max-width: 220px; }
+.meter > i { display: block; height: 100%; border-radius: 5px; transition: width 0.5s ease; }
+
 /* ---------- skeleton loading ---------- */
 .sk { border-radius: 6px; background: var(--glass-2); position: relative; overflow: hidden; }
 .sk::after {

@@ -140,6 +140,92 @@ describe('smart', () => {
   });
 });
 
+const nvmeSamsung = (over: Record<string, number> = {}) => ({
+  device: { name: '/dev/nvme0n1', type: 'nvme' },
+  model_name: 'Samsung SSD 970 EVO Plus 1TB',
+  serial_number: 'S4EWNX0R123456A',
+  firmware_version: '2B2QEXM7',
+  user_capacity: { bytes: 1000204886016 },
+  smart_status: { passed: true },
+  power_on_time: { hours: 8760 },
+  nvme_smart_health_information_log: {
+    critical_warning: over.critWarn ?? 0,
+    temperature: 313,
+    available_spare: over.spare ?? 100,
+    available_spare_threshold: 10,
+    percentage_used: over.used ?? 3,
+    data_units_read: 25438298,
+    data_units_written: 18932214,
+    host_reads: 340523455,
+    host_writes: 298344222,
+    controller_busy_time: 1234,
+    power_cycles: 512,
+    power_on_hours: 8760,
+    unsafe_shutdowns: 42,
+    media_errors: over.media ?? 0,
+    num_err_log_entries: 0,
+    warning_temp_time: 0,
+    critical_comp_time: 0,
+    temperature_sensor_1: 313,
+    temperature_sensor_2: 306,
+  },
+});
+
+describe('nvme', () => {
+  it('parses the health log into its own structure', () => {
+    const d = parseSmartJson(nvmeSamsung(), '/dev/nvme0n1', 'local')!;
+    expect(d.nvme).not.toBeNull();
+    expect(d.nvme!.percentageUsed).toBe(3);
+    expect(d.nvme!.availableSpare).toBe(100);
+    expect(d.nvme!.mediaErrors).toBe(0);
+    expect(d.nvme!.dataUnitsWritten).toBe(18932214);
+    expect(d.nvme!.unsafeShutdowns).toBe(42);
+    expect(d.powerOnHours).toBe(8760);
+    expect(d.powerCycles).toBe(512);
+    expect(d.tempC).toBe(40); // 313K
+    // NVMe has no ATA attributes and no ATA error log.
+    expect(d.attributes).toEqual([]);
+    expect(d.errorCount).toBeNull();
+  });
+  it('healthy nvme stays healthy', () => {
+    const d = parseSmartJson(nvmeSamsung(), '/dev/nvme0n1', 'local')!;
+    deriveHealth(d, { warn: 50, crit: 60 });
+    expect(d.overall).toBe('healthy');
+    expect(d.warnings).toEqual([]);
+  });
+  it('media errors warn without touching the ATA error log message', () => {
+    const d = parseSmartJson(nvmeSamsung({ media: 7 }), '/dev/nvme0n1', 'local')!;
+    deriveHealth(d, { warn: 50, crit: 60 });
+    expect(d.overall).toBe('warning');
+    expect(d.warnings.join(' ')).toMatch(/7 media errors/);
+    expect(d.warnings.join(' ')).not.toMatch(/error log/);
+  });
+  it('critical warning bits decode to plain words and go critical', () => {
+    const d = parseSmartJson(nvmeSamsung({ critWarn: 0x03 }), '/dev/nvme0n1', 'local')!;
+    deriveHealth(d, { warn: 50, crit: 60 });
+    expect(d.overall).toBe('critical');
+    expect(d.warnings.join(' ')).toMatch(/spare below threshold/);
+    expect(d.warnings.join(' ')).toMatch(/temperature above threshold/);
+  });
+  it('worn endurance warns, dead spare goes critical', () => {
+    const worn = parseSmartJson(nvmeSamsung({ used: 94 }), '/dev/nvme0n1', 'local')!;
+    deriveHealth(worn, { warn: 50, crit: 60 });
+    expect(worn.overall).toBe('warning');
+    expect(worn.warnings.join(' ')).toMatch(/94% of rated life/);
+    const dead = parseSmartJson(nvmeSamsung({ spare: 10 }), '/dev/nvme0n1', 'local')!;
+    deriveHealth(dead, { warn: 50, crit: 60 });
+    expect(dead.overall).toBe('critical');
+    expect(dead.warnings.join(' ')).toMatch(/spare 10% at\/below threshold/);
+  });
+  it('decodeNvmeWarning handles zero and unknown bits', async () => {
+    const { decodeNvmeWarning } = await import('./collectors/smart.js');
+    expect(decodeNvmeWarning(0)).toEqual([]);
+    expect(decodeNvmeWarning(null)).toEqual([]);
+    expect(decodeNvmeWarning(0x08)).toEqual(['media in read-only mode']);
+    expect(decodeNvmeWarning(0x40)).toEqual(['unknown warning bits (0x40)']);
+  });
+});
+
 describe('resolveInterval', () => {
   it('clamps and falls back', async () => {
     const { resolveInterval } = await import('./ws/hub.js');

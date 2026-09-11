@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { SmartDrive, SmartResult, WsPayload } from '../shared/types.js';
+import type { NvmeHealth, SmartDrive, SmartResult, WsPayload } from '../shared/types.js';
 import { fmtBytes, fmtPct, fmtTemp, smartDot, maskSerial } from '../lib/format.js';
 import { api } from '../lib/api.js';
 
@@ -51,6 +51,24 @@ export function Storage({ data }: { data: WsPayload | null }) {
   </>);
 }
 
+function NvmeRows({ n }: { n: NvmeHealth }) {
+  const used = n.percentageUsed ?? 0;
+  const barColor = used >= 90 ? 'var(--crit)' : used >= 70 ? 'var(--warn)' : 'var(--ok)';
+  const unitsToBytes = (u: number | null) => (u === null ? null : u * 512000);
+  return (<>
+    <tr><td>Endurance used</td><td>
+      {n.percentageUsed === null ? '—' : (<>
+        <div className="meter"><i style={{ width: `${Math.min(100, used)}%`, background: barColor }} /></div>
+        <span className="small muted">{used}% of rated life</span>
+      </>)}
+    </td></tr>
+    <tr><td>Available spare</td><td>{n.availableSpare === null ? '—' : `${n.availableSpare}%${n.spareThreshold !== null ? ` (threshold ${n.spareThreshold}%)` : ''}`}</td></tr>
+    <tr><td>Media errors</td><td>{n.mediaErrors ?? '—'}</td></tr>
+    <tr><td>Data read / written</td><td>{fmtBytes(unitsToBytes(n.dataUnitsRead))} / {fmtBytes(unitsToBytes(n.dataUnitsWritten))}</td></tr>
+    <tr><td>Unsafe shutdowns</td><td>{n.unsafeShutdowns ?? '—'}</td></tr>
+  </>);
+}
+
 function DriveDetail({ d, revealed, onReveal }: { d: SmartDrive; revealed: boolean; onReveal: () => void }) {
   return (
     <div className="card" style={{ marginTop: 12 }}>
@@ -70,9 +88,11 @@ function DriveDetail({ d, revealed, onReveal }: { d: SmartDrive; revealed: boole
         <tr><td>Interface</td><td>{d.interface || '—'}{d.usbBridge ? ' (USB bridge)' : ''}</td></tr>
         <tr><td>Overall health</td><td>{d.health}</td></tr>
         <tr><td>Power cycles</td><td>{d.powerCycles ?? '—'}</td></tr>
-        <tr><td>Reported uncorrectable errors</td><td>{d.reportedUncorrectable ?? '—'}</td></tr>
-        <tr><td>SMART error log entries</td><td>{d.errorCount ?? '—'}</td></tr>
-        <tr><td>Last self-test</td><td>{d.selftest || '—'}</td></tr>
+        {d.nvme ? <NvmeRows n={d.nvme} /> : (<>
+          <tr><td>Reported uncorrectable errors</td><td>{d.reportedUncorrectable ?? '—'}</td></tr>
+          <tr><td>SMART error log entries</td><td>{d.errorCount ?? '—'}</td></tr>
+          <tr><td>Last self-test</td><td>{d.selftest || '—'}</td></tr>
+        </>)}
       </tbody></table>
       {d.attributes.length > 0 && (<>
         <h3 style={{ marginTop: 12 }}>SMART attributes</h3>

@@ -82,6 +82,24 @@ export function parseSmartJson(doc: any, device: string, source: 'local' | 'agen
   const passed = doc.smart_status?.passed;
   const health: SmartDrive['health'] = passed === true ? 'pass' : passed === false ? 'fail' : 'unknown';
   const type: string = doc.device?.type || '';
+  // NVMe drives report a health log instead of ATA attributes. Parse it into
+  // its own structure — media errors are not ATA error-log entries and
+  // percentage used is not a reallocated sector count.
+  let nvmeHealth: SmartDrive['nvme'] = null;
+  if (nvme && typeof nvme === 'object') {
+    nvmeHealth = {
+      percentageUsed: num(nvme.percentage_used),
+      availableSpare: num(nvme.available_spare),
+      spareThreshold: num(nvme.available_spare_threshold),
+      mediaErrors: num(nvme.media_errors),
+      dataUnitsRead: num(nvme.data_units_read),
+      dataUnitsWritten: num(nvme.data_units_written),
+      unsafeShutdowns: num(nvme.unsafe_shutdowns),
+      criticalWarning: num(nvme.critical_warning),
+      warningTempTime: num(nvme.warning_temp_time),
+      critTempTime: num(nvme.critical_comp_time),
+    };
+  }
   const drive: SmartDrive = {
     device,
     model, serial,
@@ -104,6 +122,7 @@ export function parseSmartJson(doc: any, device: string, source: 'local' | 'agen
       id: num(a.id) || 0, name: String(a.name || ''), value: num(a.value),
       worst: num(a.worst), thresh: num(a.thresh), raw: attrRaw(a),
     })),
+    nvme: nvmeHealth,
     warnings: [],
     unavailableReason: null,
     source,
@@ -112,7 +131,8 @@ export function parseSmartJson(doc: any, device: string, source: 'local' | 'agen
   if (nvme) {
     if (drive.powerOnHours === null) drive.powerOnHours = num(nvme.power_on_hours);
     if (drive.powerCycles === null) drive.powerCycles = num(nvme.power_cycles);
-    drive.errorCount = num(nvme.media_errors) ?? drive.errorCount;
+    // Deliberately NOT mapped to errorCount: NVMe media errors get their own
+    // rule below. An ATA error log doesn't exist on NVMe.
   }
   const log = doc.ata_smart_self_test_log?.standard?.table;
   if (Array.isArray(log) && log.length) {
@@ -132,6 +152,20 @@ export function parseSmartJson(doc: any, device: string, source: 'local' | 'agen
 }
 
 export interface DriveTempThresholds { warn: number; crit: number; }
+
+// NVMe critical warning bitmask, decoded to plain words (NVMe spec 1.4 §8).
+export function decodeNvmeWarning(mask: number | null): string[] {
+  if (mask === null || !Number.isFinite(mask) || mask === 0) return [];
+  const out: string[] = [];
+  if (mask & 0x01) out.push('available spare below threshold');
+  if (mask & 0x02) out.push('temperature above threshold');
+  if (mask & 0x04) out.push('NVM subsystem reliability degraded');
+  if (mask & 0x08) out.push('media in read-only mode');
+  if (mask & 0x10) out.push('volatile memory backup failed');
+  if (mask & 0x20) out.push('persistent memory region read-only');
+  if (out.length === 0) out.push(`unknown warning bits (0x${mask.toString(16)})`);
+  return out;
+}
 
 // Never call a drive healthy just because smartctl exited 0 — evaluate the data.
 export function deriveHealth(d: SmartDrive, t: DriveTempThresholds): void {
@@ -160,6 +194,21 @@ export function deriveHealth(d: SmartDrive, t: DriveTempThresholds): void {
     flag('warning', `SMART warning: ${d.reportedUncorrectable} reported uncorrectable errors`);
   }
   if (d.errorCount !== null && d.errorCount > 0) flag('warning', `SMART error log holds ${d.errorCount} entries`);
+  if (d.nvme) {
+    const n = d.nvme;
+    const critFlags = decodeNvmeWarning(n.criticalWarning);
+    if (critFlags.length > 0) flag('critical', `NVMe critical warning: ${critFlags.join('; ')}`);
+    if (n.mediaErrors !== null && n.mediaErrors > 0) {
+      flag(n.mediaErrors >= 100 ? 'critical' : 'warning',
+        n.mediaErrors >= 100 ? `NVMe critical: ${n.mediaErrors} media errors` : `NVMe warning: ${n.mediaErrors} media errors reported`);
+    }
+    if (n.percentageUsed !== null && n.percentageUsed >= 90) {
+      flag('warning', `NVMe endurance at ${n.percentageUsed}% of rated life`);
+    }
+    if (n.availableSpare !== null && n.spareThreshold !== null && n.availableSpare <= n.spareThreshold) {
+      flag('critical', `NVMe spare ${n.availableSpare}% at/below threshold ${n.spareThreshold}%`);
+    }
+  }
   if (d.tempC !== null) {
     if (d.tempC >= t.crit) flag('critical', `Drive temperature is critical: ${d.tempC.toFixed(0)}°C`);
     else if (d.tempC >= t.warn) flag('warning', `Drive temperature is high: ${d.tempC.toFixed(0)}°C`);
@@ -191,7 +240,7 @@ async function readDrive(device: string): Promise<SmartDrive | null> {
         usbBridge: false, tempC: null, health: 'unknown', overall: 'unavailable',
         powerOnHours: null, powerCycles: null, reallocated: null, pending: null,
         offlineUncorrectable: null, reportedUncorrectable: null, errorCount: null,
-        selftest: null, attributes: [], warnings: [],
+        selftest: null, attributes: [], nvme: null, warnings: [],
         unavailableReason: 'Permission denied reading SMART data. The collector needs read access to the drive device — see docs/smart.md.',
         source: 'local', nodeId: null,
       };
@@ -206,7 +255,7 @@ async function readDrive(device: string): Promise<SmartDrive | null> {
     usbBridge: /sd[a-z]+$/.test(device), tempC: null, health: 'unknown', overall: 'unavailable',
     powerOnHours: null, powerCycles: null, reallocated: null, pending: null,
     offlineUncorrectable: null, reportedUncorrectable: null, errorCount: null,
-    selftest: null, attributes: [], warnings: [],
+    selftest: null, attributes: [], nvme: null, warnings: [],
     unavailableReason: 'SMART unavailable through this USB connection — this USB/SATA bridge does not pass SMART commands through. The drive itself may be fine.',
     source: 'local', nodeId: null,
   };

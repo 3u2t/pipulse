@@ -184,6 +184,22 @@ export interface SmartAttribute {
 
 export type SmartOverall = 'healthy' | 'warning' | 'critical' | 'unavailable';
 
+// NVMe health log fields, kept separate from ATA attributes on purpose:
+// percentage used, spare and media errors mean different things than
+// reallocated/pending sectors, so they get their own rules and UI.
+export interface NvmeHealth {
+  percentageUsed: number | null;   // 0-100+ of rated endurance
+  availableSpare: number | null;   // percent
+  spareThreshold: number | null;   // percent
+  mediaErrors: number | null;
+  dataUnitsRead: number | null;    // units of 1000 x 512 bytes
+  dataUnitsWritten: number | null; // units of 1000 x 512 bytes
+  unsafeShutdowns: number | null;
+  criticalWarning: number | null;  // raw bitmask, decoded for display
+  warningTempTime: number | null;  // minutes above warning temp
+  critTempTime: number | null;     // minutes above critical temp
+}
+
 export interface SmartDrive {
   device: string;
   model: string | null;
@@ -204,6 +220,7 @@ export interface SmartDrive {
   errorCount: number | null;
   selftest: string | null;
   attributes: SmartAttribute[];
+  nvme: NvmeHealth | null;   // set for NVMe drives, null for ATA/SATA/USB
   warnings: string[];
   unavailableReason: string | null;
   source: 'local' | 'agent';

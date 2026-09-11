@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+- NVMe drives get their own health section: percentage used with endurance
+  bar, available spare vs threshold, media errors (no longer lumped into the
+  ATA error-log counter), lifetime data read/written, unsafe shutdowns
+  (shown, never alerted), decoded critical warning bits.
+
 ## 0.2.0 (2026-09-11)
 - Notifications: generic webhook + SMTP email (stdlib-only client, STARTTLS/AUTH
   LOGIN), per-severity event selection, test buttons, delivery log, hourly retry

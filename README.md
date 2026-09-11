@@ -116,7 +116,7 @@ Backend tests: `npm --workspace backend run test`. Types: `npm --workspace backe
 - [x] Multi-server: one backend, several agents, per-node alerts
 - [x] More network detail (interface type, totals, gateway, DNS, TCP count)
 - [ ] Phone push (probably just documenting ntfy/Gotify as webhook target)
-- [ ] NVMe-specific SMART attributes (percentage used, media errors) instead of lumping them into the generic counters
+- [x] NVMe-specific SMART attributes (percentage used, spare, media errors, critical warning bits)
 
 ## Updating / uninstalling
 

@@ -74,6 +74,25 @@ critical 60°C — changeable in Settings). Any pending sector is a warning;
 10+ reallocated sectors is critical. Every alert names the attribute and the
 count, e.g. "SMART critical: 12 reallocated sectors".
 
+## NVMe drives
+
+NVMe drives don't have ATA attributes — they report a health log instead, so
+PiPulse keeps it separate rather than squeezing it into sector counters:
+
+- **Percentage used** — share of rated endurance consumed. Warns at 90%.
+- **Available spare** vs threshold — critical when spare hits the threshold
+  (also covered by the critical warning bit below).
+- **Media errors** — failed flash reads. Any count warns; 100+ is critical.
+  These used to land in the ATA "error log" counter, which was misleading.
+- **Data read/written** — lifetime totals, shown in the drive details.
+- **Unsafe shutdowns** — shown, never alerted. Common on Pis without a UPS;
+  alerting on it would just be noise.
+- **Critical warning bitmask** — decoded to words ("available spare below
+  threshold", "temperature above threshold", …). Any set bit is critical.
+
+No smartmontools config needed; `smartctl -j` on `/dev/nvme0n1` works out of
+the box on Raspberry Pi OS, through the agent like everything else.
+
 ## Privacy
 
 Drive serial numbers are masked in the UI (`••••••1234`) unless you click
