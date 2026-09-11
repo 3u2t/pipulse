@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { execFile } from 'node:child_process';
-import type { CpuSnapshot, MemSnapshot, FsEntry, DiskIo, NetIface, ServiceInfo, ProcInfo } from '../shared/types.js';
+import type { CpuSnapshot, MemSnapshot, FsEntry, DiskIo, NetIface, NetKind, NetSummary, ServiceInfo, ProcInfo } from '../shared/types.js';
 
 const read = (p: string): string | null => { try { return fs.readFileSync(p, 'utf8'); } catch { return null; }; };
 
@@ -171,6 +171,14 @@ export function collectDiskIo(): DiskIo {
   return out;
 }
 
+// Pure helper so tests don't need sysfs. flags come from /sys/class/net/<name>.
+export function classifyIface(name: string, flags: { wireless: boolean; hasDevice: boolean; devtype: string }): NetKind {
+  if (flags.wireless || flags.devtype === 'wlan') return 'wifi';
+  if (flags.hasDevice) return 'eth';
+  if (/^(veth|docker|br-|virbr|tun|tap|wg|tailscale|zt|ppp|wwan|rmnet)/.test(name)) return 'virtual';
+  return 'unknown';
+}
+
 let prevNet = new Map<string, { rx: number; tx: number; t: number }>();
 export function collectNet(): NetIface[] {
   const dev = read('/proc/net/dev');
@@ -196,14 +204,71 @@ export function collectNet(): NetIface[] {
     const oper = read(`/sys/class/net/${name}/operstate`)?.trim();
     const mac = read(`/sys/class/net/${name}/address`)?.trim() || null;
     const speed = Number(read(`/sys/class/net/${name}/speed`));
+    let kind: NetKind = 'unknown';
+    try {
+      const base = `/sys/class/net/${name}`;
+      const wireless = fs.existsSync(`${base}/wireless`);
+      let hasDevice = false;
+      try { hasDevice = fs.statSync(base + '/device').isDirectory() || fs.statSync(base + '/device').isSymbolicLink(); } catch { /* no device link */ }
+      const uevent = read(`${base}/uevent`) || '';
+      const devtype = (uevent.match(/^DEVTYPE=(.*)$/m)?.[1] || '').trim();
+      kind = classifyIface(name, { wireless, hasDevice, devtype });
+    } catch { /* kind stays unknown */ }
     out.push({
-      name, up: oper === 'up', ipv4: null,
+      name, kind, up: oper === 'up', ipv4: null,
       mac, speedMb: Number.isFinite(speed) && speed > 0 ? speed : null,
-      rxBps, txBps, rxPackets: rxP ?? null, txPackets: txP ?? null,
+      rxBps, txBps, rxBytes: rxB, txBytes: txB,
+      rxPackets: rxP ?? null, txPackets: txP ?? null,
       rxErrors: rxE ?? null, txErrors: txE ?? null, rxDropped: rxD ?? null, txDropped: txD ?? null,
     });
   }
   return out;
+}
+
+// Default gateway from /proc/net/route (little-endian hex, flags & 2 == gateway).
+export function parseRouteTable(text: string): string | null {
+  for (const line of text.split('\n').slice(1)) {
+    const p = line.trim().split(/\s+/);
+    if (p.length < 4 || p[1] !== '00000000') continue;
+    const flags = parseInt(p[3], 16);
+    if (!(flags & 2)) continue;
+    const gw = p[2].padStart(8, '0');
+    const b = [6, 4, 2, 0].map((i) => parseInt(gw.slice(i, i + 2), 16));
+    if (b.some((x) => !Number.isFinite(x))) continue;
+    return b.join('.');
+  }
+  return null;
+}
+
+export function parseResolvConf(text: string): string[] {
+  const out: string[] = [];
+  for (const line of text.split('\n')) {
+    const m = line.match(/^\s*nameserver\s+(\S+)/);
+    if (m && !out.includes(m[1])) out.push(m[1]);
+  }
+  return out.slice(0, 3);
+}
+
+// Count established TCP connections (state 01) across v4/v6 tables.
+export function countTcpEstablished(...tables: string[]): number | null {
+  let total = 0, seen = false;
+  for (const text of tables) {
+    if (!text.includes('rem_address')) continue;
+    seen = true;
+    for (const line of text.split('\n').slice(1)) {
+      const p = line.trim().split(/\s+/);
+      if (p.length > 3 && p[3] === '01') total++;
+    }
+  }
+  return seen ? total : null;
+}
+
+export function collectNetSummary(): NetSummary {
+  return {
+    gateway: parseRouteTable(read('/proc/net/route') || ''),
+    dns: parseResolvConf(read('/etc/resolv.conf') || ''),
+    tcpEstablished: countTcpEstablished(read('/proc/net/tcp') || '', read('/proc/net/tcp6') || ''),
+  };
 }
 
 // ---------- Uptime ----------

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { execFile } from 'node:child_process';
-import { getAgentPush } from '../agent/agent.js';
+import { getAgentPush, getAgentPushes } from '../agent/agent.js';
 import type { SmartAttribute, SmartDrive, SmartOverall, SmartResult } from '../shared/types.js';
 
 // smartctl is slow and wakes drives; cache results for 5 minutes.
@@ -107,6 +107,7 @@ export function parseSmartJson(doc: any, device: string, source: 'local' | 'agen
     warnings: [],
     unavailableReason: null,
     source,
+    nodeId: null, // mergeAgentSmart fills this in for remote drives
   };
   if (nvme) {
     if (drive.powerOnHours === null) drive.powerOnHours = num(nvme.power_on_hours);
@@ -192,7 +193,7 @@ async function readDrive(device: string): Promise<SmartDrive | null> {
         offlineUncorrectable: null, reportedUncorrectable: null, errorCount: null,
         selftest: null, attributes: [], warnings: [],
         unavailableReason: 'Permission denied reading SMART data. The collector needs read access to the drive device — see docs/smart.md.',
-        source: 'local',
+        source: 'local', nodeId: null,
       };
     }
     if (/unknown usb bridge|unable to detect device type/i.test(r.out + r.err) && !dtype) continue;
@@ -207,33 +208,38 @@ async function readDrive(device: string): Promise<SmartDrive | null> {
     offlineUncorrectable: null, reportedUncorrectable: null, errorCount: null,
     selftest: null, attributes: [], warnings: [],
     unavailableReason: 'SMART unavailable through this USB connection — this USB/SATA bridge does not pass SMART commands through. The drive itself may be fine.',
-    source: 'local',
+    source: 'local', nodeId: null,
   };
 }
 
-// Fresh host-agent SMART docs with health already evaluated.
+// Fresh host-agent SMART docs with health already evaluated, tagged with
+// the agent they came from so multi-server setups can tell drives apart.
 export function agentDrives(temp: DriveTempThresholds = { warn: 50, crit: 60 }): SmartDrive[] {
+  const out: SmartDrive[] = [];
   try {
-    const push = getAgentPush();
-    const fresh = push && Date.now() - push.ts < 5 * 60 * 1000;
-    const docs = fresh && Array.isArray((push.body as { smart?: unknown }).smart)
-      ? (push.body as { smart: string[] }).smart : null;
-    if (!docs) return [];
-    const out = mergeAgentSmart(docs);
-    for (const d of out) if (!d.unavailableReason) deriveHealth(d, temp);
-    return out;
-  } catch { return []; }
+    for (const [id, push] of getAgentPushes()) {
+      if (Date.now() - push.ts >= 5 * 60 * 1000) continue;
+      const docs = Array.isArray((push.body as { smart?: unknown }).smart)
+        ? (push.body as { smart: string[] }).smart : null;
+      if (!docs) continue;
+      for (const d of mergeAgentSmart(docs, id)) {
+        if (!d.unavailableReason) deriveHealth(d, temp);
+        out.push(d);
+      }
+    }
+  } catch { /* ignore */ }
+  return out;
 }
 
 // Agent-provided smartctl JSON documents (collected on the host as root).
-export function mergeAgentSmart(docs: string[]): SmartDrive[] {
+export function mergeAgentSmart(docs: string[], nodeId: string | null = null): SmartDrive[] {
   const out: SmartDrive[] = [];
   for (const raw of docs.slice(0, 8)) {
     try {
       const doc = JSON.parse(raw);
       const dev = String(doc.device?.name || '');
       const d = parseSmartJson(doc, dev || 'agent-drive', 'agent');
-      if (d) out.push(d);
+      if (d) { d.nodeId = nodeId; out.push(d); }
     } catch { /* ignore one bad doc */ }
   }
   return out;

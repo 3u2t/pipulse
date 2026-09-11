@@ -100,8 +100,8 @@ Backend tests: `npm --workspace backend run test`. Types: `npm --workspace backe
 
 ## Known limitations
 
-- Single server only. Multi-server is on the list, not started.
-- No push notifications — toasts + alert history. Webhook/email planned.
+- Remote nodes report host metrics + SMART only. Docker/services/processes/logs are local to the backend host.
+- Webhook + email notifications for alerts (no push to phones — use ntfy or Gotify as the webhook target if you want that).
 - Docker actions are start/stop/restart on purpose. No exec, no compose management, never will be arbitrary commands.
 - SQLite only. Fine for one Pi, don't @ me about Postgres.
 - SMART over weird USB bridges may need a manual `-d` type — tell me which enclosure.
@@ -111,10 +111,10 @@ Backend tests: `npm --workspace backend run test`. Types: `npm --workspace backe
 
 - [x] Basic monitoring, Docker per-container stats, WebSocket, CasaOS files
 - [x] SMART with USB support, mobile layout
-- [ ] Notifications (webhook first, maybe email)
-- [ ] Better history graphs (downsampling UI is rough)
-- [ ] Multi-server support
-- [ ] More network detail
+- [x] Notifications (webhook + SMTP email, with delivery log)
+- [x] Bucketed history graphs, per-interface traffic history
+- [x] Multi-server: one backend, several agents, per-node alerts
+- [x] More network detail (interface type, totals, gateway, DNS, TCP count)
 
 ## Updating / uninstalling
 

@@ -46,6 +46,22 @@ export function openDb(dataDir: string): DatabaseSync {
       hostname TEXT, arch TEXT, version TEXT,
       last_seen TEXT
     );
+    CREATE TABLE IF NOT EXISTS notified_keys (
+      key TEXT PRIMARY KEY,
+      severity TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'sent',
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts INTEGER NOT NULL,
+      kind TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'sent',
+      detail TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS idx_notifications_ts ON notifications(ts);
   `);
   return db;
 }

@@ -41,7 +41,7 @@ export class DemoMonitoringProvider implements MonitoringProvider {
       mem: { totalKb, availableKb: totalKb - usedKb, usedKb, usedPct: +d.mem.toFixed(1), cachedKb: 512000, buffersKb: 64000, swapTotalKb: 102400, swapFreeKb: 98000, swapUsedKb: 4400 },
       filesystems: [{ device: '/dev/mmcblk0p2', mount: '/', fstype: 'ext4', totalBytes: 32e9, usedBytes: 32e9 * 0.46, freeBytes: 32e9 * 0.54, usedPct: 46.2 }],
       diskIo: { readBps: d.read, writeBps: d.write },
-      net: [{ name: 'eth0', up: true, ipv4: '192.168.1.20', mac: '2c:cf:67:00:11:22', speedMb: 1000, rxBps: d.rx, txBps: d.tx, rxPackets: 900001, txPackets: 400002, rxErrors: 0, txErrors: 0, rxDropped: 1, txDropped: 0 }],
+      net: [{ name: 'eth0', kind: 'eth' as const, up: true, ipv4: '192.168.1.20', mac: '2c:cf:67:00:11:22', speedMb: 1000, rxBps: d.rx, txBps: d.tx, rxBytes: 900001 * 1500, txBytes: 400002 * 1500, rxPackets: 900001, txPackets: 400002, rxErrors: 0, txErrors: 0, rxDropped: 1, txDropped: 0 }],
       processes: [
         { pid: 1, name: 'systemd', user: '0', cpuPct: 0.1, memPct: 0.4, memKb: 12000, uptimeSec: 90000 },
         { pid: 812, name: 'pipulse', user: '1000', cpuPct: 2.4, memPct: 1.1, memKb: 92000, uptimeSec: 80000 },

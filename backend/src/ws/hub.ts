@@ -3,9 +3,10 @@ import { WebSocketServer, WebSocket } from 'ws';
 import type { MonitoringProvider } from '../providers/providers.js';
 import type { AppConfig } from '../config/config.js';
 import { listContainers } from '../docker/containers.js';
-import { evaluateAlerts, listAlerts, getThresholds } from '../alerts/alerts.js';
+import { evaluateAlerts, evaluateNodeAlerts, listAlerts, getThresholds } from '../alerts/alerts.js';
 import { collectSmart } from '../collectors/smart.js';
-import { agentStatus } from '../agent/agent.js';
+import { agentStatus, agentNodes } from '../agent/agent.js';
+import { reconcileNotifications } from '../notify/notify.js';
 import { getDb, pruneMetrics, getSetting } from '../db/db.js';
 import type { WsPayload } from '../shared/types.js';
 
@@ -31,7 +32,12 @@ export function startWs(server: Server, provider: MonitoringProvider, config: Ap
       const t = getThresholds();
       // SMART is cached server-side (5 min) so this is cheap after the first tick.
       const smart = await collectSmart({ warn: t.driveTempWarn, crit: t.driveTempCrit }).catch(() => ({ tool: 'ok' as const, drives: [] }));
-      evaluateAlerts(s, agent.connected || provider.name === 'demo', smart.drives);
+      const demo = provider.name === 'demo';
+      const nodes = demo ? [] : agentNodes(intervalMs);
+      evaluateAlerts(s, nodes.map((n) => ({ id: n.id, hostname: n.hostname, connected: demo ? true : n.connected })), smart.drives);
+      if (!demo) evaluateNodeAlerts(nodes.filter((n) => n.connected));
+      const activeAlerts = listAlerts('active');
+      void reconcileNotifications(activeAlerts, agent.hostname || 'pipulse', demo);
       const payload: WsPayload = {
         ts: new Date().toISOString(),
         cpu: s.cpu, mem: s.mem, filesystems: s.filesystems, diskIo: s.diskIo, net: s.net,
@@ -42,8 +48,8 @@ export function startWs(server: Server, provider: MonitoringProvider, config: Ap
           containers: docker.containers,
         },
         services: s.services.slice(0, 60), processes: s.processes.slice(0, 20),
-        alerts: listAlerts('active'),
-        agent, uptimeSec: s.uptimeSec, bootTime: s.bootTime,
+        alerts: activeAlerts,
+        agent, nodes, uptimeSec: s.uptimeSec, bootTime: s.bootTime,
       };
       latest = payload;
       // persist host rollup + per-container rows (cheap: one tick per interval)
@@ -52,6 +58,7 @@ export function startWs(server: Server, provider: MonitoringProvider, config: Ap
       const now = Date.now();
       const rx = s.net.reduce((a, n) => a + (n.rxBps || 0), 0), tx = s.net.reduce((a, n) => a + (n.txBps || 0), 0);
       ins.run(now, 'host', '', s.cpu.usage, s.mem.usedPct, s.cpu.tempC, rx, tx, s.diskIo.readBps, s.diskIo.writeBps);
+      for (const n of s.net) ins.run(now, 'iface', n.name, null, null, null, n.rxBps, n.txBps, null, null);
       for (const c of docker.containers) {
         ins.run(now, 'container', c.id, c.cpuPct, c.memPct, null, c.netRxBps, c.netTxBps, c.blkReadBps, c.blkWriteBps);
       }

@@ -20,6 +20,14 @@ export const fmtUptime = (s: number | null): string => {
 };
 export const stateDot = (s: string): string =>
   s === 'healthy' || s === 'running' ? '🟢' : s === 'degraded' || s === 'restarting' ? '🟡' : s === 'stopped' || s === 'unhealthy' ? '🔴' : '⚪';
+// Short duration for bucket captions: 3661 -> "1h 1m", 90 -> "1m 30s".
+export const fmtDuration = (s: number): string => {
+  if (!Number.isFinite(s) || s < 0) return '—';
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
+  if (h) return `${h}h ${m}m`;
+  if (m) return sec ? `${m}m ${sec}s` : `${m}m`;
+  return `${sec}s`;
+};
 export const smartDot = (s: string): string =>
   s === 'healthy' ? '🟢 Healthy' : s === 'warning' ? '🟡 Warning' : s === 'critical' ? '🔴 Critical' : '⚪ SMART unavailable';
 // Server timestamps are UTC. The timezone setting (if set) applies here.

@@ -1,5 +1,15 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
+import { fmtDateTime } from '../lib/format.js';
+
+interface NotifyState {
+  webhook_url: string; events: string[];
+  smtp_host: string; smtp_port: string; smtp_user: string; smtp_pass: string;
+  smtp_from: string; smtp_to: string; smtp_tls: string; smtp_pass_set: boolean;
+}
+interface NotifyLog { id: number; ts: number; kind: string; title: string; status: string; detail: string }
+
+const ALL_EVENTS = ['critical', 'warning', 'info', 'resolved'];
 
 export function Settings() {
   const [s, setS] = useState<Record<string, string>>({});
@@ -32,7 +42,76 @@ export function Settings() {
     {field('th_drive_temp_warn', 'Drive temp warning °C')}{field('th_drive_temp_crit', 'Drive temp critical °C')}
     {field('retention_days', 'Data retention (days)')}
     <p><button onClick={save}>Save settings</button></p>
+    <Notifications />
     <h3>System</h3>
     {!health ? <p className="muted">Loading…</p> : <pre className="small">{JSON.stringify(health, null, 2)}</pre>}
+  </>);
+}
+
+function Notifications() {
+  const [n, setN] = useState<NotifyState>({ webhook_url: '', events: ['critical', 'warning'], smtp_host: '', smtp_port: '587', smtp_user: '', smtp_pass: '', smtp_from: '', smtp_to: '', smtp_tls: 'auto', smtp_pass_set: false });
+  const [log, setLog] = useState<NotifyLog[]>([]);
+  const [msg, setMsg] = useState('');
+  const load = async () => {
+    try {
+      const r = await api<{ config: NotifyState; log: NotifyLog[] }>(`/api/notify`);
+      setN({ ...r.config, smtp_pass: '' });
+      setLog(r.log);
+    } catch { /* backend older than notifications, or offline */ }
+  };
+  useEffect(() => { void load(); }, []);
+  const set = (k: keyof NotifyState, v: string) => setN({ ...n, [k]: v });
+  const toggleEvent = (e: string) => setN({ ...n, events: n.events.includes(e) ? n.events.filter((x) => x !== e) : [...n.events, e] });
+  const save = async () => {
+    await api(`/api/notify`, { method: 'PUT', body: JSON.stringify({ ...n, smtp_pass: n.smtp_pass || undefined }) });
+    setMsg('Notification settings saved.');
+    setTimeout(() => setMsg(''), 2500);
+    void load();
+  };
+  const test = async (channel: 'webhook' | 'email') => {
+    setMsg('Sending test…');
+    try {
+      await api(`/api/notify/test`, { method: 'POST', body: JSON.stringify({ channel }) });
+      setMsg(`Test sent via ${channel}.`);
+    } catch (e) {
+      setMsg(`Test failed: ${(e as Error).message}`);
+    }
+    setTimeout(() => setMsg(''), 4000);
+    void load();
+  };
+  return (<>
+    <h3>Notifications</h3>
+    {msg && <p>{msg}</p>}
+    <p><label>Webhook URL (POSTs JSON on alerts)<br />
+      <input value={n.webhook_url} onChange={(e) => set('webhook_url', e.target.value)} placeholder="https://… or http://…:8123/api/webhook/…" style={{ width: 'min(480px, 100%)' }} /></label></p>
+    <p>Notify on:{' '}
+      {ALL_EVENTS.map((e) => (
+        <label key={e} style={{ display: 'inline-block', marginRight: 12, fontWeight: 400 }}>
+          <input type="checkbox" checked={n.events.includes(e)} onChange={() => toggleEvent(e)} /> {e}
+        </label>
+      ))}
+    </p>
+    <h3>Email (SMTP)</h3>
+    <p className="small muted">Plain SMTP with STARTTLS when offered, AUTH LOGIN when a username is set. For Gmail use an app password.</p>
+    <p><label>SMTP host<br /><input value={n.smtp_host} onChange={(e) => set('smtp_host', e.target.value)} placeholder="mail.example.com" /></label></p>
+    <p><label>Port<br /><input value={n.smtp_port} onChange={(e) => set('smtp_port', e.target.value)} placeholder="587" /></label></p>
+    <p><label>TLS<br /><select value={n.smtp_tls} onChange={(e) => set('smtp_tls', e.target.value)}>
+      <option value="auto">auto</option><option value="direct">direct (port 465)</option><option value="off">off (local relay)</option>
+    </select></label></p>
+    <p><label>Username<br /><input value={n.smtp_user} onChange={(e) => set('smtp_user', e.target.value)} /></label></p>
+    <p><label>Password{n.smtp_pass_set ? ' (saved — leave empty to keep)' : ''}<br /><input type="password" value={n.smtp_pass} onChange={(e) => set('smtp_pass', e.target.value)} /></label></p>
+    <p><label>From address<br /><input value={n.smtp_from} onChange={(e) => set('smtp_from', e.target.value)} placeholder="pipulse@example.com" /></label></p>
+    <p><label>To address<br /><input value={n.smtp_to} onChange={(e) => set('smtp_to', e.target.value)} placeholder="me@example.com" /></label></p>
+    <p>
+      <button onClick={save}>Save notification settings</button>{' '}
+      <button onClick={() => test('webhook')}>Send test webhook</button>{' '}
+      <button onClick={() => test('email')}>Send test email</button>
+    </p>
+    <h3>Recent deliveries</h3>
+    {log.length === 0 ? <p className="muted">Nothing sent yet.</p> : (
+      <div style={{ overflowX: 'auto' }}><table><thead><tr><th>Time</th><th>Channel</th><th>Title</th><th>Status</th><th>Detail</th></tr></thead><tbody>
+        {log.map((l) => <tr key={l.id}><td className="small">{fmtDateTime(new Date(l.ts).toISOString())}</td><td>{l.kind}</td><td className="small">{l.title}</td><td>{l.status === 'sent' ? '🟢 sent' : '🔴 failed'}</td><td className="small muted">{l.detail}</td></tr>)}
+      </tbody></table></div>
+    )}
   </>);
 }

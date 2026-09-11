@@ -9,7 +9,12 @@ export function Storage({ data }: { data: WsPayload | null }) {
   const [reveal, setReveal] = useState<string | null>(null);
   if (!data) return <p className="muted">Waiting for live data…</p>;
   if (!smart) api<{ filesystems: unknown; smart: SmartResult }>(`/api/storage`).then((r) => setSmart(r.smart || { tool: 'ok', drives: [] })).catch(() => setSmart({ tool: 'ok', drives: [] }));
-  const sel = smart?.drives.find((d) => d.device === open);
+  const sel = smart?.drives.find((d) => `${d.nodeId || 'local'}:${d.device}` === open);
+  const nodeName = (id: string | null): string | null => {
+    if (!id) return null;
+    return (data.nodes || []).find((n) => n.id === id)?.hostname || id;
+  };
+  const showNode = (smart?.drives || []).some((d) => d.nodeId);
   return (<>
     <h2>Storage</h2>
     <table><thead><tr><th>Device</th><th>Mount</th><th>Type</th><th>Total</th><th>Used</th><th>Free</th><th>Used %</th></tr></thead><tbody>
@@ -24,10 +29,13 @@ export function Storage({ data }: { data: WsPayload | null }) {
       <p className="muted">No SMART-capable drives detected.</p>
     ) : (<>
       <div style={{ overflowX: 'auto' }}><table>
-        <thead><tr><th>Drive</th><th>Temperature</th><th>SMART health</th><th>Power-on hours</th><th>Reallocated</th><th>Pending</th><th>Uncorrectable</th></tr></thead>
-        <tbody>{smart.drives.map((d) => (
-          <tr key={d.device} onClick={() => setOpen(open === d.device ? null : d.device)} style={{ cursor: 'pointer' }} title="Click for details">
+        <thead><tr><th>Drive</th>{showNode && <th>Node</th>}<th>Temperature</th><th>SMART health</th><th>Power-on hours</th><th>Reallocated</th><th>Pending</th><th>Uncorrectable</th></tr></thead>
+        <tbody>{smart.drives.map((d) => {
+          const key = `${d.nodeId || 'local'}:${d.device}`;
+          return (
+          <tr key={key} onClick={() => setOpen(open === key ? null : key)} style={{ cursor: 'pointer' }} title="Click for details">
             <td>{d.model || d.device}<div className="small muted">{d.device}{d.usbBridge ? ' · USB' : ''}{d.source === 'agent' ? ' · via agent' : ''}</div></td>
+            {showNode && <td className="small">{nodeName(d.nodeId) || 'this server'}</td>}
             <td>{fmtTemp(d.tempC)}</td>
             <td>{smartDot(d.overall)}</td>
             <td>{d.powerOnHours ?? '—'}</td>
@@ -35,7 +43,8 @@ export function Storage({ data }: { data: WsPayload | null }) {
             <td>{d.pending ?? '—'}</td>
             <td>{d.offlineUncorrectable ?? '—'}</td>
           </tr>
-        ))}</tbody>
+          );
+        })}</tbody>
       </table></div>
       {sel && <DriveDetail d={sel} revealed={reveal === sel.device} onReveal={() => setReveal(reveal === sel.device ? null : sel.device)} />}
     </>)}

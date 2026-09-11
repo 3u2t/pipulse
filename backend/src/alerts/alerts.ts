@@ -38,7 +38,9 @@ function resolve(key: string): void {
   getDb().prepare("UPDATE alerts SET status='resolved', resolved_at=datetime('now') WHERE key=? AND status IN ('active','acknowledged')").run(key);
 }
 
-export function evaluateAlerts(snap: { cpu: { usage: number | null; tempC: number | null }; mem: { usedPct: number | null }; filesystems: { mount: string; usedPct: number | null }[] }, agentConnected: boolean, drives: SmartDrive[] = []): void {
+export interface AgentPresence { id: string; hostname: string; connected: boolean }
+
+export function evaluateAlerts(snap: { cpu: { usage: number | null; tempC: number | null }; mem: { usedPct: number | null }; filesystems: { mount: string; usedPct: number | null }[] }, agents: AgentPresence[], drives: SmartDrive[] = []): void {
   const t = getThresholds();
   // CPU
   if (snap.cpu.usage !== null && snap.cpu.usage >= t.cpuCrit) upsert('cpu-usage', 'critical', 'cpu', `CPU usage is ${snap.cpu.usage.toFixed(0)}% (above ${t.cpuCrit}%).`);
@@ -60,18 +62,41 @@ export function evaluateAlerts(snap: { cpu: { usage: number | null; tempC: numbe
     else if (fs.usedPct !== null && fs.usedPct >= 70) upsert(key, 'info', 'storage', `Disk usage on ${fs.mount} is ${fs.usedPct.toFixed(0)}%.`);
     else resolve(key);
   }
-  if (!agentConnected) upsert('agent', 'warning', 'agent', 'PiPulse Agent disconnected.');
-  else resolve('agent');
+  // One key per agent so multi-server setups see exactly which node went quiet.
+  // The legacy bare 'agent' key (pre multi-server) resolves itself away.
+  resolve('agent');
+  for (const a of agents) {
+    const key = `agent:${a.id}`;
+    if (!a.connected) upsert(key, 'warning', 'agent', `PiPulse agent on ${a.hostname} disconnected.`);
+    else resolve(key);
+  }
   // SMART drives. "Unavailable" is a state, not a failure — no alert for it.
   for (const d of drives) {
-    const key = `smart:${d.device}`;
+    const node = d.nodeId ? d.nodeId + ':' : '';
+    const key = `smart:${node}${d.device}`;
+    if (d.nodeId) resolve(`smart:${d.device}`); // legacy key without node prefix
     if (d.overall === 'unavailable') { resolve(key); continue; }
-    const label = `${d.device}${d.model ? ` (${d.model})` : ''}`;
+    const label = `${d.nodeId ? d.nodeId + ' ' : ''}${d.device}${d.model ? ` (${d.model})` : ''}`;
     if (d.overall === 'critical') {
       upsert(key, 'critical', 'smart', `SMART critical on ${label}: ${d.warnings[0] || 'health check failed'}`);
     } else if (d.overall === 'warning') {
       upsert(key, 'warning', 'smart', `SMART warning on ${label}: ${d.warnings[0] || 'attention recommended'}`);
     } else resolve(key);
+  }
+}
+
+// Threshold checks for remote nodes (agent-reported metrics only).
+export function evaluateNodeAlerts(nodes: { id: string; hostname: string; cpuUsage: number | null; tempC: number | null; memPct: number | null }[]): void {
+  const t = getThresholds();
+  const check = (key: string, v: number | null, warn: number, crit: number, msg: (n: string) => string) => {
+    if (v !== null && v >= crit) upsert(key, 'critical', 'node', msg(`${crit}`));
+    else if (v !== null && v >= warn) upsert(key, 'warning', 'node', msg(`${warn}`));
+    else resolve(key);
+  };
+  for (const n of nodes) {
+    check(`node:${n.id}:cpu`, n.cpuUsage, t.cpuWarn, t.cpuCrit, (th) => `CPU usage on ${n.hostname} is ${n.cpuUsage!.toFixed(0)}% (above ${th}%).`);
+    check(`node:${n.id}:temp`, n.tempC, t.tempWarn, t.tempCrit, (th) => `CPU temperature on ${n.hostname} is ${n.tempC!.toFixed(0)}°C (above ${th}°C).`);
+    check(`node:${n.id}:mem`, n.memPct, t.memWarn, t.memCrit, (th) => `Memory usage on ${n.hostname} is ${n.memPct!.toFixed(0)}% (above ${th}%).`);
   }
 }
 

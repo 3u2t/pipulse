@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import type { ContainerSummary } from '../shared/types.js';
+import type { ContainerSummary, HistResponse } from '../shared/types.js';
 import { fmtBytes, fmtPct, fmtBps, fmtUptime, stateDot } from '../lib/format.js';
 import { Chart } from '../components/Chart.js';
 import { StatePill } from '../components/pills.js';
@@ -78,12 +78,13 @@ export function Docker({ data }: { data: { available: boolean; running: number; 
 export function DockerDetail() {
   const { id = '' } = useParams();
   const [c, setC] = useState<ContainerSummary | null>(null);
-  const [hist, setHist] = useState<{ ts: number; cpu: number | null; memPct: number | null; rxBps: number | null; txBps: number | null; readBps: number | null; writeBps: number | null }[]>([]);
+  const [hist, setHist] = useState<HistResponse['points']>([]);
+  const [histMeta, setHistMeta] = useState<{ total: number; bucketSec: number } | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
 
   useEffect(() => {
     api<ContainerSummary>(`/api/docker/containers/${id}`).then(setC).catch(() => setC(null));
-    api<typeof hist>(`/api/docker/containers/${id}/stats`).then((r) => setHist(Array.isArray(r) ? r : [])).catch(() => setHist([]));
+    api<HistResponse>(`/api/docker/containers/${id}/stats?hours=6`).then((r) => { setHist(r.points || []); setHistMeta({ total: r.total, bucketSec: r.bucketSec }); }).catch(() => { setHist([]); setHistMeta(null); });
     api<string[]>(`/api/docker/containers/${id}/logs?tail=100`).then(setLogs).catch(() => setLogs([]));
   }, [id]);
 
@@ -104,7 +105,7 @@ export function DockerDetail() {
         <div className="card"><h3>PIDs</h3><div className="big">{c.pids ?? '—'}</div></div>
         <div className="card"><h3>Ports</h3><div className="small">{c.ports.join(', ') || '—'}</div><h3>Volumes</h3><div className="small">{c.mounts.join(', ') || '—'}</div></div>
       </div>
-      <h3>History</h3>
+      <h3>History (last 6 hours{histMeta ? ` · ${histMeta.total} samples → ${hist.length} points` : ''})</h3>
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(340px,1fr))' }}>
         <Chart key={`cpu-${id}-${hist.length}`} title="CPU" series={al((r) => r.cpu)} labels={['cpu %']} unit="%" />
         <Chart key={`ram-${id}-${hist.length}`} title="RAM" series={al((r) => r.memPct)} labels={['ram %']} unit="%" />

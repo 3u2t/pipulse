@@ -38,20 +38,31 @@ export interface FsEntry {
 
 export interface DiskIo { readBps: number | null; writeBps: number | null; }
 
+export type NetKind = 'eth' | 'wifi' | 'virtual' | 'unknown';
+
 export interface NetIface {
   name: string;
+  kind: NetKind;
   up: boolean;
   ipv4: string | null;
   mac: string | null;
   speedMb: number | null;
   rxBps: number | null;
   txBps: number | null;
+  rxBytes: number | null;
+  txBytes: number | null;
   rxPackets: number | null;
   txPackets: number | null;
   rxErrors: number | null;
   txErrors: number | null;
   rxDropped: number | null;
   txDropped: number | null;
+}
+
+export interface NetSummary {
+  gateway: string | null;
+  dns: string[];
+  tcpEstablished: number | null;
 }
 
 export type ContainerState =
@@ -127,8 +138,43 @@ export interface WsPayload {
   processes: ProcInfo[];
   alerts: AlertItem[];
   agent: { connected: boolean; lastSeen: string | null; hostname: string | null; version: string | null };
+  nodes: NodeInfo[];
   uptimeSec: number | null;
   bootTime: string | null;
+}
+
+// One monitored server: either this backend host ('local') or a PiPulse agent.
+export interface NodeInfo {
+  id: string;
+  hostname: string;
+  arch: string | null;
+  version: string | null;
+  connected: boolean;
+  lastSeen: string | null;
+  cpuUsage: number | null;
+  tempC: number | null;
+  memPct: number | null;
+  uptimeSec: number | null;
+  local: boolean;
+}
+
+// Bucketed history response: points are per-bucket averages.
+export interface HistBucket {
+  ts: number;
+  cpu: number | null;
+  memPct: number | null;
+  tempC: number | null;
+  rxBps: number | null;
+  txBps: number | null;
+  readBps: number | null;
+  writeBps: number | null;
+  n: number;
+}
+
+export interface HistResponse {
+  points: HistBucket[];
+  bucketSec: number;
+  total: number;
 }
 
 export interface SmartAttribute {
@@ -161,6 +207,7 @@ export interface SmartDrive {
   warnings: string[];
   unavailableReason: string | null;
   source: 'local' | 'agent';
+  nodeId: string | null;   // agent id for remote drives, null for local ones
 }
 
 export interface SmartResult {

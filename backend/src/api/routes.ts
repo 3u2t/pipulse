@@ -1,11 +1,14 @@
 import { Router } from 'express';
 import type { MonitoringProvider } from '../providers/providers.js';
 import type { AppConfig } from '../config/config.js';
-import { getDb } from '../db/db.js';
+import { getDb, getSetting } from '../db/db.js';
 import { dockerAvailable, listContainers, containerDetail, containerAction, containerLogs, dockerCounts } from '../docker/containers.js';
-import { readLogs } from '../collectors/system.js';
+import { readLogs, collectNetSummary } from '../collectors/system.js';
 import { collectSmart } from '../collectors/smart.js';
 import { listAlerts, getThresholds } from '../alerts/alerts.js';
+import { queryHistory } from '../db/history.js';
+import { agentNodes } from '../agent/agent.js';
+import { getNotifyConfig, validateNotifyInput, listNotifications, sendWebhook, sendEmail } from '../notify/notify.js';
 
 export function apiRouter(provider: MonitoringProvider, _config: AppConfig): Router {
   const r = Router();
@@ -24,7 +27,9 @@ export function apiRouter(provider: MonitoringProvider, _config: AppConfig): Rou
     const t = getThresholds();
     res.json({ filesystems: s.filesystems, diskIo: s.diskIo, smart: await collectSmart({ warn: t.driveTempWarn, crit: t.driveTempCrit }).catch(() => ({ tool: 'ok', drives: [] })) });
   });
-  r.get('/network', async (_req, res) => res.json((await provider.snapshot()).net));
+  r.get('/network', async (_req, res) => {
+    res.json({ interfaces: (await provider.snapshot()).net, summary: collectNetSummary() });
+  });
   r.get('/processes', async (_req, res) => res.json((await provider.snapshot()).processes));
   r.get('/services', async (_req, res) => res.json((await provider.snapshot()).services));
 
@@ -49,9 +54,8 @@ export function apiRouter(provider: MonitoringProvider, _config: AppConfig): Rou
     res.json(c);
   });
   r.get('/docker/containers/:id/stats', (req, res) => {
-    const rows = getDb().prepare('SELECT ts,cpu,mem_pct AS memPct,rx_bps AS rxBps,tx_bps AS txBps,read_bps AS readBps,write_bps AS writeBps FROM metrics WHERE kind=? AND ref=? ORDER BY ts DESC LIMIT 288')
-      .all('container', req.params.id) as unknown as object[];
-    res.json([...rows].reverse());
+    const hours = Math.min(24 * 7, Math.max(0.02, Number(req.query.hours) || 1));
+    res.json(queryHistory('container', req.params.id, hours, 300));
   });
   r.post('/docker/containers/:id/:action', async (req, res) => {
     const { id, action } = req.params;
@@ -107,11 +111,63 @@ export function apiRouter(provider: MonitoringProvider, _config: AppConfig): Rou
 
   r.get('/history', (req, res) => {
     const kind = String(req.query.kind || 'host');
+    if (!/^(host|container|iface)$/.test(kind)) return res.status(400).json({ error: 'unknown history kind' });
     const hours = Math.min(24 * 7, Math.max(0.02, Number(req.query.hours) || 1));
-    const since = Date.now() - hours * 3600 * 1000;
-    const rows = getDb().prepare('SELECT ts,cpu,mem_pct AS memPct,temp_c AS tempC,rx_bps AS rxBps,tx_bps AS txBps,read_bps AS readBps,write_bps AS writeBps FROM metrics WHERE kind=? AND ref=? AND ts>? ORDER BY ts ASC LIMIT 5000')
-      .all(kind, String(req.query.ref || ''), since) as unknown as object[];
-    res.json(rows.length ? rows : { message: 'Not enough data yet.' });
+    res.json(queryHistory(kind, String(req.query.ref || ''), hours, 300));
+  });
+
+  r.get('/nodes', (_req, res) => {
+    res.json(agentNodes(Number(getSetting('monitor_interval', '5000')) || 5000));
+  });
+
+  r.get('/notify', (_req, res) => {
+    const cfg = getNotifyConfig();
+    res.json({ config: { ...cfg, smtpPass: undefined, smtpPassSet: cfg.smtpPass !== '' }, log: listNotifications() });
+  });
+  r.put('/notify', (req, res) => {
+    const body = (req.body || {}) as Record<string, unknown>;
+    const v = validateNotifyInput(body);
+    if (!v.ok) return res.status(400).json({ error: v.error });
+    const db = getDb();
+    const set = (k: string, val: unknown) => {
+      if (val === undefined) return;
+      db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(k, Array.isArray(val) ? val.join(',') : String(val));
+    };
+    set('notify_webhook_url', body.webhook_url);
+    set('notify_events', body.events);
+    set('notify_smtp_host', body.smtp_host);
+    set('notify_smtp_port', body.smtp_port);
+    set('notify_smtp_user', body.smtp_user);
+    if (typeof body.smtp_pass === 'string' && body.smtp_pass !== '') set('notify_smtp_pass', body.smtp_pass);
+    set('notify_smtp_from', body.smtp_from);
+    set('notify_smtp_to', body.smtp_to);
+    set('notify_smtp_tls', body.smtp_tls);
+    res.json({ ok: true });
+  });
+  r.post('/notify/test', async (req, res) => {
+    const body = (req.body || {}) as { channel?: string } & Record<string, unknown>;
+    const cfg = getNotifyConfig();
+    // Test uses saved config merged with any overrides in the request body.
+    const merged = {
+      ...cfg,
+      webhookUrl: typeof body.webhook_url === 'string' ? body.webhook_url : cfg.webhookUrl,
+      smtpHost: typeof body.smtp_host === 'string' ? body.smtp_host : cfg.smtpHost,
+      smtpTo: typeof body.smtp_to === 'string' ? body.smtp_to : cfg.smtpTo,
+      smtpPass: typeof body.smtp_pass === 'string' && body.smtp_pass !== '' ? body.smtp_pass : cfg.smtpPass,
+    };
+    const payload = { event: 'test', severity: 'info', title: 'PiPulse test notification', message: 'If you see this, notifications work.', component: 'system', key: 'test', hostname: 'pipulse', ts: new Date().toISOString() };
+    try {
+      if (body.channel === 'email') {
+        if (!merged.smtpHost || !merged.smtpTo) return res.status(400).json({ error: 'SMTP host and recipient are required' });
+        await sendEmail({ host: merged.smtpHost, port: Number(body.smtp_port) || cfg.smtpPort, user: cfg.smtpUser, pass: merged.smtpPass, from: cfg.smtpFrom || cfg.smtpUser, tls: cfg.smtpTls }, merged.smtpTo, '[PiPulse] test notification', 'If you see this, email notifications work.');
+      } else {
+        if (!merged.webhookUrl) return res.status(400).json({ error: 'webhook URL is required' });
+        await sendWebhook(merged.webhookUrl, payload);
+      }
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(502).json({ ok: false, error: (e as Error).message });
+    }
   });
 
   r.get('/docker-status', (_req, res) => res.json({ available: dockerAvailable() }));
