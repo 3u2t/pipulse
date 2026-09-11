@@ -1,0 +1,19 @@
+{
+  "name": "pipulse",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PiPulse — Your server. One pulse. Raspberry Pi home-server monitoring dashboard.",
+  "scripts": {
+    "dev:backend": "npm --workspace backend run dev",
+    "dev:frontend": "npm --workspace frontend run dev",
+    "build": "npm --workspace backend run build && npm --workspace frontend run build",
+    "test": "npm --workspace backend run test && npm --workspace frontend run test",
+    "agent:build": "go -C agent build -o ../bin/pipulse-agent .",
+    "agent:test": "go -C agent test ./...",
+    "sync:shared": "cp shared/types.ts backend/src/shared/types.ts && cp shared/types.ts frontend/src/shared/types.ts && echo synced"
+  },
+  "workspaces": [
+    "backend",
+    "frontend"
+  ]
+}
