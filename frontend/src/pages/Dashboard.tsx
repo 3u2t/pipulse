@@ -127,7 +127,8 @@ export function Dashboard({ data }: { data: WsPayload | null }) {
       {!data ? <Skeleton /> : node ? <RemoteNode node={node} alerts={data.alerts} drives={drives.filter((d) => d.nodeId === node.id)} /> : (<>
         <div className={`banner ${s.cls}`}><strong>{s.dot} {s.text}</strong>{s.reason && <div className="small">{s.reason}</div>}</div>
         <div className="grid">
-          <StatRing title="CPU usage" pct={data.cpu.usage} sub={`${fmtTemp(data.cpu.tempC)} · load ${data.cpu.load1 ?? '—'}`} />
+          <StatRing title="CPU usage" pct={data.cpu.usage} sub={`load ${data.cpu.load1 ?? '—'} · ${data.cpu.freqMhz ? `${data.cpu.freqMhz} MHz` : 'freq —'}`} />
+          <div className="card"><h3>CPU temperature</h3><div className="big">{fmtTemp(data.cpu.tempC)}</div><div className="small muted">{data.cpu.tempC === null ? 'no sensor reading' : 'SoC sensor · live'}</div></div>
           <StatRing title="Memory" pct={data.mem.usedPct} sub={`${fmtBytes(data.mem.usedKb ? data.mem.usedKb * 1024 : null)} of ${fmtBytes(data.mem.totalKb ? data.mem.totalKb * 1024 : null)}`} />
           <StatRing title="Disk space" pct={data.filesystems[0]?.usedPct ?? null} sub={`${data.filesystems[0]?.mount || ''} · ${fmtBytes(data.filesystems[0]?.freeBytes ?? null)} free`} />
           <div className="card"><h3>Network</h3><div className="big">{fmtBps(data.net[0]?.rxBps ?? null)}</div><div className="small muted">↓ down · ↑ {fmtBps(data.net[0]?.txBps ?? null)}</div></div>
