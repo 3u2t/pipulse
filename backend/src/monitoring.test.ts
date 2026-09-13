@@ -408,6 +408,38 @@ describe('notifications', () => {
     const log = notify.listNotifications();
     expect(log.some((l) => l.title === 'm')).toBe(false);
   });
+  it('sends Telegram via Bot API and validates input', async () => {
+    const { openDb, getDb, setSetting } = await import('./db/db.js');
+    const notify = await import('./notify/notify.js');
+    openDb('/tmp/pipulse-test-' + process.pid);
+    const received: { url: string; body: string }[] = [];
+    const { createServer } = await import('node:http');
+    const server = createServer((req, res) => {
+      let buf = '';
+      req.on('data', (c) => { buf += c; });
+      req.on('end', () => {
+        received.push({ url: req.url || '', body: buf });
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ ok: true, result: { message_id: 1 } }));
+      });
+    });
+    await new Promise<void>((res) => server.listen(0, '127.0.0.1', res));
+    const port = (server.address() as { port: number }).port;
+    setSetting('notify_telegram_api_base', `http://127.0.0.1:${port}`);
+    try {
+      await notify.sendTelegram({ botToken: '123456:AA-fake-token-for-tests-0123456789', chatId: '42', apiBase: `http://127.0.0.1:${port}`, timeoutMs: 5000 }, 'hello from test');
+      expect(received).toHaveLength(1);
+      expect(received[0].url).toContain('/bot123456:');
+      expect(JSON.parse(received[0].body).chat_id).toBe(42);
+      expect(notify.validateNotifyInput({ telegram_bot_token: 'bad' }).ok).toBe(false);
+      expect(notify.validateNotifyInput({ telegram_chat_id: 'not a chat!!!' }).ok).toBe(false);
+      expect(notify.validateNotifyInput({ telegram_bot_token: '123456:AA-fake-token-for-tests-0123456789', telegram_chat_id: '-100123' }).ok).toBe(true);
+      expect(notify.telegramMessageFor({ key: 'smart-sda', severity: 'critical', title: 'SMART critical', message: 'SMART critical: 12 reallocated sectors', component: 'storage' }, 'pi')).toContain('reallocated');
+    } finally {
+      server.close();
+      setSetting('notify_telegram_api_base', 'https://api.telegram.org');
+    }
+  });
 });
 
 describe('multi-server', () => {

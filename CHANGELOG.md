@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- Telegram notifications: bot token + chat ID in Settings, test button,
+  delivery log, same firing/escalation/resolved pipeline as webhook/email —
+  SMART drive problems (HDD/SSD/NVMe) notify automatically.
 - NVMe drives get their own health section: percentage used with endurance
   bar, available spare vs threshold, media errors (no longer lumped into the
   ATA error-log counter), lifetime data read/written, unsafe shutdowns

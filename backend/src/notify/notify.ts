@@ -6,6 +6,9 @@ import type { AlertItem } from '../shared/types.js';
 export interface NotifyConfig {
   webhookUrl: string;
   events: string[];
+  telegramBotToken: string;
+  telegramChatId: string;
+  telegramApiBase: string;
   smtpHost: string;
   smtpPort: number;
   smtpUser: string;
@@ -24,6 +27,9 @@ export function getNotifyConfig(): NotifyConfig {
   return {
     webhookUrl: getSetting('notify_webhook_url', '').trim(),
     events: events.length ? events : ['critical', 'warning'],
+    telegramBotToken: getSetting('notify_telegram_bot_token', '').trim(),
+    telegramChatId: getSetting('notify_telegram_chat_id', '').trim(),
+    telegramApiBase: getSetting('notify_telegram_api_base', 'https://api.telegram.org').trim() || 'https://api.telegram.org',
     smtpHost: getSetting('notify_smtp_host', '').trim(),
     smtpPort: Number.isFinite(port) && port > 0 && port < 65536 ? port : 587,
     smtpUser: getSetting('notify_smtp_user', ''),
@@ -37,6 +43,16 @@ export function getNotifyConfig(): NotifyConfig {
 export function validateNotifyInput(body: Record<string, unknown>): { ok: boolean; error?: string } {
   if (body.webhook_url !== undefined && body.webhook_url !== '') {
     if (typeof body.webhook_url !== 'string' || !/^https?:\/\/.+/.test(body.webhook_url)) return { ok: false, error: 'webhook URL must start with http:// or https://' };
+  }
+  if (body.telegram_bot_token !== undefined && body.telegram_bot_token !== '') {
+    if (typeof body.telegram_bot_token !== 'string' || body.telegram_bot_token.length < 10 || !/^\d+:[\w-]{10,}$/.test(body.telegram_bot_token.trim())) {
+      return { ok: false, error: 'Telegram bot token looks invalid (expected 123456:ABC… from @BotFather)' };
+    }
+  }
+  if (body.telegram_chat_id !== undefined && body.telegram_chat_id !== '') {
+    if (typeof body.telegram_chat_id !== 'string' || !/^(-?\d+|@[A-Za-z0-9_]{5,})$/.test(body.telegram_chat_id.trim())) {
+      return { ok: false, error: 'Telegram chat ID must be a numeric ID (e.g. 123456789, -100… for groups) or @channel' };
+    }
   }
   if (body.smtp_port !== undefined) {
     const p = Number(body.smtp_port);
@@ -80,6 +96,33 @@ export async function sendWebhook(url: string, payload: Record<string, unknown>)
       signal: ctrl.signal,
     });
     if (!res.ok) throw new Error(`webhook returned HTTP ${res.status}`);
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+// ---------- telegram (Bot API, fetch only — no extra deps) ----------
+export interface TelegramOptions { botToken: string; chatId: string; apiBase?: string; timeoutMs?: number }
+
+export function telegramMessageFor(t: NotifyTarget, hostname: string): string {
+  const icon = t.severity === 'critical' ? '🔴' : t.severity === 'warning' ? '🟡' : t.severity === 'resolved' ? '🟢' : '🔵';
+  return `${icon} [PiPulse] ${t.severity.toUpperCase()}: ${t.title}\n${t.message}\n\nHost: ${hostname}\nTime: ${new Date().toISOString()}\nKey: ${t.key}`.slice(0, 4000);
+}
+
+export async function sendTelegram(o: TelegramOptions, text: string): Promise<void> {
+  const base = (o.apiBase || 'https://api.telegram.org').replace(/\/+$/, '');
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), o.timeoutMs ?? 10000);
+  try {
+    const res = await fetch(`${base}/bot${o.botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': 'PiPulse/0.1' },
+      body: JSON.stringify({ chat_id: /^-?\d+$/.test(o.chatId) ? Number(o.chatId) : o.chatId, text }),
+      signal: ctrl.signal,
+    });
+    if (!res.ok) throw new Error(`telegram returned HTTP ${res.status}`);
+    const data = (await res.json()) as { ok?: boolean; description?: string };
+    if (!data.ok) throw new Error(`telegram rejected message: ${data.description || 'unknown error'}`);
   } finally {
     clearTimeout(t);
   }
@@ -220,6 +263,18 @@ async function deliver(cfg: NotifyConfig, t: NotifyTarget, hostname: string): Pr
       }
     })());
   }
+  if (cfg.telegramBotToken && cfg.telegramChatId) {
+    jobs.push((async () => {
+      const text = telegramMessageFor(t, hostname);
+      try {
+        await sendTelegram({ botToken: cfg.telegramBotToken, chatId: cfg.telegramChatId, apiBase: cfg.telegramApiBase }, text);
+        logNotification('telegram', t.title, t.message, 'sent', cfg.telegramChatId);
+      } catch (e) {
+        logNotification('telegram', t.title, t.message, 'failed', (e as Error).message);
+        throw e;
+      }
+    })());
+  }
   if (cfg.smtpTo && cfg.smtpHost) {
     const subject = `[PiPulse] ${t.severity.toUpperCase()}: ${t.title}`;
     jobs.push((async () => {
@@ -243,7 +298,7 @@ export async function reconcileNotifications(active: AlertItem[], hostname: stri
   if (demo) return;
   try {
     const cfg = getNotifyConfig();
-    if (!cfg.webhookUrl && !(cfg.smtpTo && cfg.smtpHost)) return;
+    if (!cfg.webhookUrl && !(cfg.smtpTo && cfg.smtpHost) && !(cfg.telegramBotToken && cfg.telegramChatId)) return;
     const db = getDb();
     const known = new Map(
       (db.prepare('SELECT key, severity, status, updated_at AS updatedAt FROM notified_keys').all() as unknown as { key: string; severity: string; status: string; updatedAt: string }[])

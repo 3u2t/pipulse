@@ -8,7 +8,7 @@ import { collectSmart } from '../collectors/smart.js';
 import { listAlerts, getThresholds } from '../alerts/alerts.js';
 import { queryHistory } from '../db/history.js';
 import { agentNodes } from '../agent/agent.js';
-import { getNotifyConfig, validateNotifyInput, listNotifications, sendWebhook, sendEmail } from '../notify/notify.js';
+import { getNotifyConfig, validateNotifyInput, listNotifications, sendWebhook, sendEmail, sendTelegram } from '../notify/notify.js';
 
 export function apiRouter(provider: MonitoringProvider, _config: AppConfig): Router {
   const r = Router();
@@ -122,7 +122,7 @@ export function apiRouter(provider: MonitoringProvider, _config: AppConfig): Rou
 
   r.get('/notify', (_req, res) => {
     const cfg = getNotifyConfig();
-    res.json({ config: { ...cfg, smtpPass: undefined, smtpPassSet: cfg.smtpPass !== '' }, log: listNotifications() });
+    res.json({ config: { ...cfg, telegramBotToken: undefined, telegramBotTokenSet: cfg.telegramBotToken !== '', smtpPass: undefined, smtpPassSet: cfg.smtpPass !== '' }, log: listNotifications() });
   });
   r.put('/notify', (req, res) => {
     const body = (req.body || {}) as Record<string, unknown>;
@@ -135,6 +135,8 @@ export function apiRouter(provider: MonitoringProvider, _config: AppConfig): Rou
     };
     set('notify_webhook_url', body.webhook_url);
     set('notify_events', body.events);
+    if (typeof body.telegram_bot_token === 'string' && body.telegram_bot_token !== '') set('notify_telegram_bot_token', body.telegram_bot_token.trim());
+    set('notify_telegram_chat_id', typeof body.telegram_chat_id === 'string' ? body.telegram_chat_id.trim() : body.telegram_chat_id);
     set('notify_smtp_host', body.smtp_host);
     set('notify_smtp_port', body.smtp_port);
     set('notify_smtp_user', body.smtp_user);
@@ -151,6 +153,8 @@ export function apiRouter(provider: MonitoringProvider, _config: AppConfig): Rou
     const merged = {
       ...cfg,
       webhookUrl: typeof body.webhook_url === 'string' ? body.webhook_url : cfg.webhookUrl,
+      telegramBotToken: typeof body.telegram_bot_token === 'string' && body.telegram_bot_token !== '' ? body.telegram_bot_token.trim() : cfg.telegramBotToken,
+      telegramChatId: typeof body.telegram_chat_id === 'string' ? body.telegram_chat_id.trim() : cfg.telegramChatId,
       smtpHost: typeof body.smtp_host === 'string' ? body.smtp_host : cfg.smtpHost,
       smtpTo: typeof body.smtp_to === 'string' ? body.smtp_to : cfg.smtpTo,
       smtpPass: typeof body.smtp_pass === 'string' && body.smtp_pass !== '' ? body.smtp_pass : cfg.smtpPass,
@@ -160,6 +164,9 @@ export function apiRouter(provider: MonitoringProvider, _config: AppConfig): Rou
       if (body.channel === 'email') {
         if (!merged.smtpHost || !merged.smtpTo) return res.status(400).json({ error: 'SMTP host and recipient are required' });
         await sendEmail({ host: merged.smtpHost, port: Number(body.smtp_port) || cfg.smtpPort, user: cfg.smtpUser, pass: merged.smtpPass, from: cfg.smtpFrom || cfg.smtpUser, tls: cfg.smtpTls }, merged.smtpTo, '[PiPulse] test notification', 'If you see this, email notifications work.');
+      } else if (body.channel === 'telegram') {
+        if (!merged.telegramBotToken || !merged.telegramChatId) return res.status(400).json({ error: 'Telegram bot token and chat ID are required' });
+        await sendTelegram({ botToken: merged.telegramBotToken, chatId: merged.telegramChatId, apiBase: cfg.telegramApiBase }, '🔵 [PiPulse] test notification\nIf you see this, Telegram notifications work.');
       } else {
         if (!merged.webhookUrl) return res.status(400).json({ error: 'webhook URL is required' });
         await sendWebhook(merged.webhookUrl, payload);

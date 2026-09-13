@@ -4,6 +4,7 @@ import { fmtDateTime } from '../lib/format.js';
 
 interface NotifyState {
   webhook_url: string; events: string[];
+  telegram_bot_token: string; telegram_chat_id: string; telegram_bot_token_set: boolean;
   smtp_host: string; smtp_port: string; smtp_user: string; smtp_pass: string;
   smtp_from: string; smtp_to: string; smtp_tls: string; smtp_pass_set: boolean;
 }
@@ -49,13 +50,13 @@ export function Settings() {
 }
 
 function Notifications() {
-  const [n, setN] = useState<NotifyState>({ webhook_url: '', events: ['critical', 'warning'], smtp_host: '', smtp_port: '587', smtp_user: '', smtp_pass: '', smtp_from: '', smtp_to: '', smtp_tls: 'auto', smtp_pass_set: false });
+  const [n, setN] = useState<NotifyState>({ webhook_url: '', events: ['critical', 'warning'], telegram_bot_token: '', telegram_chat_id: '', telegram_bot_token_set: false, smtp_host: '', smtp_port: '587', smtp_user: '', smtp_pass: '', smtp_from: '', smtp_to: '', smtp_tls: 'auto', smtp_pass_set: false });
   const [log, setLog] = useState<NotifyLog[]>([]);
   const [msg, setMsg] = useState('');
   const load = async () => {
     try {
       const r = await api<{ config: NotifyState; log: NotifyLog[] }>(`/api/notify`);
-      setN({ ...r.config, smtp_pass: '' });
+      setN({ ...r.config, telegram_bot_token: '', smtp_pass: '' });
       setLog(r.log);
     } catch { /* backend older than notifications, or offline */ }
   };
@@ -68,7 +69,7 @@ function Notifications() {
     setTimeout(() => setMsg(''), 2500);
     void load();
   };
-  const test = async (channel: 'webhook' | 'email') => {
+  const test = async (channel: 'webhook' | 'email' | 'telegram') => {
     setMsg('Sending test…');
     try {
       await api(`/api/notify/test`, { method: 'POST', body: JSON.stringify({ channel }) });
@@ -91,6 +92,10 @@ function Notifications() {
         </label>
       ))}
     </p>
+    <h3>Telegram</h3>
+    <p className="small muted">1. Schreib <code>@BotFather</code> auf Telegram an, sende <code>/newbot</code> und kopiere den Token. 2. Starte deinen Bot einmal (damit er dir schreiben darf). 3. Finde deine Chat-ID z. B. über <code>@userinfobot</code> — oder für Gruppen: Bot in die Gruppe einladen, dann ID aus <code>getUpdates</code> lesen. HDD/SSD-Warnungen (SMART critical/warning) kommen automatisch, sobald oben critical/warning aktiviert ist.</p>
+    <p><label>Bot token{n.telegram_bot_token_set ? ' (saved — leave empty to keep)' : ''}<br /><input type="password" value={n.telegram_bot_token} onChange={(e) => set('telegram_bot_token', e.target.value)} placeholder="123456789:AA…" style={{ width: 'min(480px, 100%)' }} /></label></p>
+    <p><label>Chat ID (Zahl, -100… für Gruppen, oder @channel)<br /><input value={n.telegram_chat_id} onChange={(e) => set('telegram_chat_id', e.target.value)} placeholder="123456789" /></label></p>
     <h3>Email (SMTP)</h3>
     <p className="small muted">Plain SMTP with STARTTLS when offered, AUTH LOGIN when a username is set. For Gmail use an app password.</p>
     <p><label>SMTP host<br /><input value={n.smtp_host} onChange={(e) => set('smtp_host', e.target.value)} placeholder="mail.example.com" /></label></p>
@@ -105,6 +110,7 @@ function Notifications() {
     <p>
       <button onClick={save}>Save notification settings</button>{' '}
       <button onClick={() => test('webhook')}>Send test webhook</button>{' '}
+      <button onClick={() => test('telegram')}>Send test Telegram</button>{' '}
       <button onClick={() => test('email')}>Send test email</button>
     </p>
     <h3>Recent deliveries</h3>

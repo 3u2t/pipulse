@@ -101,7 +101,7 @@ Backend tests: `npm --workspace backend run test`. Types: `npm --workspace backe
 ## Known limitations
 
 - Remote nodes report host metrics + SMART only. Docker/services/processes/logs are local to the backend host.
-- Webhook + email notifications for alerts (no push to phones — use ntfy or Gotify as the webhook target if you want that).
+- Webhook + Telegram + email notifications for alerts (Telegram covers phone push; ntfy/Gotify still work as webhook targets).
 - Docker actions are start/stop/restart on purpose. No exec, no compose management, never will be arbitrary commands.
 - SQLite only. Fine for one Pi, don't @ me about Postgres.
 - SMART over weird USB bridges may need a manual `-d` type — tell me which enclosure.
@@ -111,11 +111,11 @@ Backend tests: `npm --workspace backend run test`. Types: `npm --workspace backe
 
 - [x] Basic monitoring, Docker per-container stats, WebSocket, CasaOS files
 - [x] SMART with USB support, mobile layout
-- [x] Notifications (webhook + SMTP email, with delivery log)
+- [x] Notifications (webhook + Telegram + SMTP email, with delivery log)
 - [x] Bucketed history graphs, per-interface traffic history
 - [x] Multi-server: one backend, several agents, per-node alerts
 - [x] More network detail (interface type, totals, gateway, DNS, TCP count)
-- [ ] Phone push (probably just documenting ntfy/Gotify as webhook target)
+- [x] Phone push via Telegram (ntfy/Gotify still work as webhook targets)
 - [x] NVMe-specific SMART attributes (percentage used, spare, media errors, critical warning bits)
 
 ## Updating / uninstalling
