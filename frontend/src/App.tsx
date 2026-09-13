@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { usePiPulseSocket } from './hooks/useSocket.js';
 import { Sidebar, MobileBar, ConnBadge } from './components/layout.js';
 import { Toasts } from './components/toasts.js';
@@ -14,6 +14,7 @@ import { Network } from './pages/Network.js';
 import { Logs } from './pages/Logs.js';
 import { Alerts } from './pages/Alerts.js';
 import { Settings } from './pages/Settings.js';
+import { Onboarding } from './pages/Onboarding.js';
 import { Login } from './pages/Login.js';
 import { api } from './lib/api.js';
 import './styles.css';
@@ -27,6 +28,7 @@ function applyTheme() {
 function Shell() {
   const { data, conn } = usePiPulseSocket();
   const loc = useLocation();
+  const nav = useNavigate();
   const [host, setHost] = useState(() => localStorage.getItem('pipulse-hostname') || '');
   useEffect(applyTheme, []);
   // Prefer the live agent hostname; fall back to the name in Settings.
@@ -35,6 +37,8 @@ function Shell() {
     api<{ settings: Record<string, string> }>(`/api/settings`).then((r) => {
       if (r.settings.hostname) { setHost((h) => h || r.settings.hostname); localStorage.setItem('pipulse-hostname', r.settings.hostname); }
       if (r.settings.timezone) localStorage.setItem('pipulse-tz', r.settings.timezone);
+      // First run: send fresh installs to the setup wizard (skippable, re-runnable).
+      if (r.settings.setup_completed !== '1' && loc.pathname !== '/onboarding' && loc.pathname !== '/login') nav('/onboarding');
     }).catch(() => undefined);
   }, []);
   return (
@@ -67,6 +71,7 @@ function Shell() {
             <Route path="/logs" element={<Logs />} />
             <Route path="/alerts" element={<Alerts />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/login" element={<Login />} />
           </Routes>
           </div>

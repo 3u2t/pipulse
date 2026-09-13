@@ -116,6 +116,7 @@ Backend tests: `npm --workspace backend run test`. Types: `npm --workspace backe
 - [x] Multi-server: one backend, several agents, per-node alerts
 - [x] More network detail (interface type, totals, gateway, DNS, TCP count)
 - [x] Phone push via Telegram (ntfy/Gotify still work as webhook targets)
+- [x] Setup wizard on first run (password, server, thresholds, notifications, system check)
 - [x] NVMe-specific SMART attributes (percentage used, spare, media errors, critical warning bits)
 
 ## Updating / uninstalling

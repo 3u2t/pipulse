@@ -99,7 +99,7 @@ export function apiRouter(provider: MonitoringProvider, _config: AppConfig): Rou
     res.json({ settings: Object.fromEntries(rows.map((x) => [x.key, x.value])), thresholds: getThresholds() });
   });
   r.put('/settings', (req, res) => {
-    const allowed = new Set(['timezone', 'hostname', 'monitor_interval', 'th_cpu_warn', 'th_cpu_crit', 'th_temp_warn', 'th_temp_crit', 'th_mem_warn', 'th_mem_crit', 'th_disk_warn', 'th_disk_crit', 'th_drive_temp_warn', 'th_drive_temp_crit', 'retention_days', 'theme']);
+    const allowed = new Set(['timezone', 'hostname', 'monitor_interval', 'th_cpu_warn', 'th_cpu_crit', 'th_temp_warn', 'th_temp_crit', 'th_mem_warn', 'th_mem_crit', 'th_disk_warn', 'th_disk_crit', 'th_drive_temp_warn', 'th_drive_temp_crit', 'retention_days', 'theme', 'setup_completed']);
     const body = req.body as Record<string, unknown>;
     for (const [k, v] of Object.entries(body || {})) {
       if (allowed.has(k) && (typeof v === 'string' || typeof v === 'number')) {
@@ -122,7 +122,23 @@ export function apiRouter(provider: MonitoringProvider, _config: AppConfig): Rou
 
   r.get('/notify', (_req, res) => {
     const cfg = getNotifyConfig();
-    res.json({ config: { ...cfg, telegramBotToken: undefined, telegramBotTokenSet: cfg.telegramBotToken !== '', smtpPass: undefined, smtpPassSet: cfg.smtpPass !== '' }, log: listNotifications() });
+    // snake_case to match the PUT contract (the Settings form posts snake_case).
+    res.json({
+      config: {
+        webhook_url: cfg.webhookUrl,
+        events: cfg.events,
+        telegram_chat_id: cfg.telegramChatId,
+        telegram_bot_token_set: cfg.telegramBotToken !== '',
+        smtp_host: cfg.smtpHost,
+        smtp_port: String(cfg.smtpPort),
+        smtp_user: cfg.smtpUser,
+        smtp_from: cfg.smtpFrom,
+        smtp_to: cfg.smtpTo,
+        smtp_tls: cfg.smtpTls,
+        smtp_pass_set: cfg.smtpPass !== '',
+      },
+      log: listNotifications(),
+    });
   });
   r.put('/notify', (req, res) => {
     const body = (req.body || {}) as Record<string, unknown>;

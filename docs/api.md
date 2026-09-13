@@ -11,7 +11,7 @@ Base: `http://<host>:8080`. Auth: `pipulse_session` cookie from `POST /api/auth/
 - `POST /api/services/:name/{start,stop,restart}` (`*.service` regex only)
 - `GET /api/logs?source=system|service|docker`
 - `GET /api/alerts`, `POST /api/alerts/:id/{ack,resolve}`
-- `GET|PUT /api/settings` (allowlisted keys)
+- `GET|PUT /api/settings` (allowlisted keys, incl. `setup_completed` for the onboarding wizard)
 - `GET /api/history?kind=host|container|iface&ref=&hours=1` — bucketed `{ points, bucketSec, total }`
 - `GET /api/nodes` — known agents with liveness + last reported metrics
 - `GET /api/notify` — notification config (passwords/tokens never returned) + delivery log

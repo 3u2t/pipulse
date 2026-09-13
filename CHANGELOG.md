@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+- Setup-Wizard (`/onboarding`): fragt beim ersten Start alles ab — Passwort,
+  Server, Schwellen, Benachrichtigungen, System-Check — danach per Navigation,
+  Strg+K oder Settings-Link erneut aufrufbar. Fixt nebenbei, dass gespeicherte
+  Benachrichtigungs-Einstellungen im Formular nie angezeigt wurden (GET gab
+  camelCase zurück, PUT erwartet snake_case).
 - Telegram notifications: bot token + chat ID in Settings, test button,
   delivery log, same firing/escalation/resolved pipeline as webhook/email —
   SMART drive problems (HDD/SSD/NVMe) notify automatically.

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { fmtDateTime } from '../lib/format.js';
 
@@ -33,6 +34,7 @@ export function Settings() {
   return (<>
     <h2>Settings</h2>
     {msg && <p>{msg}</p>}
+    <p className="small muted">Lieber geführt? <Link to="/onboarding">Setup-Wizard öffnen</Link> — fragt alles Schritt für Schritt ab.</p>
     <h3>General</h3>
     {field('timezone', 'Timezone')}{field('hostname', 'Hostname')}{field('monitor_interval', 'Monitoring interval (ms)')}
     <h3>Monitoring thresholds</h3>

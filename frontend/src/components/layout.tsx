@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 const links = [
   ['/', 'Dashboard'], ['/system', 'System'], ['/docker', 'Docker'], ['/services', 'Services'],
   ['/processes', 'Processes'], ['/storage', 'Storage'], ['/network', 'Network'],
-  ['/logs', 'Logs'], ['/alerts', 'Alerts'], ['/settings', 'Settings'],
+  ['/logs', 'Logs'], ['/alerts', 'Alerts'], ['/settings', 'Settings'], ['/onboarding', 'Setup'],
 ] as const;
 
 export function Sidebar() {

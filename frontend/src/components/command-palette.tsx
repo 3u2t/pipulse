@@ -20,6 +20,7 @@ export function CommandPalette({ data }: { data: WsPayload | null }) {
     { label: 'Go: Docker', go: () => nav('/docker') }, { label: 'Go: Storage', go: () => nav('/storage') },
     { label: 'Go: Network', go: () => nav('/network') }, { label: 'Go: Logs', go: () => nav('/logs') },
     { label: 'Go: Alerts', go: () => nav('/alerts') }, { label: 'Go: Settings', go: () => nav('/settings') },
+    { label: 'Setup: Onboarding wizard', go: () => nav('/onboarding') },
     { label: 'Refresh metrics', go: () => location.reload() },
     ...(data?.docker.containers.map((c) => ({ label: `Container: ${c.name}`, go: () => nav(`/docker/${c.shortId}`) })) || []),
     ...(data?.services.slice(0, 20).map((s) => ({ label: `Service: ${s.name}`, go: () => nav('/services') })) || []),
