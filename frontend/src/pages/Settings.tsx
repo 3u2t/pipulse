@@ -34,7 +34,7 @@ export function Settings() {
   return (<>
     <h2>Settings</h2>
     {msg && <p>{msg}</p>}
-    <p className="small muted">Lieber geführt? <Link to="/onboarding">Setup-Wizard öffnen</Link> — fragt alles Schritt für Schritt ab.</p>
+    <p className="small muted">Prefer guidance? <Link to="/onboarding">Open the setup wizard</Link> — it walks through everything step by step.</p>
     <h3>General</h3>
     {field('timezone', 'Timezone')}{field('hostname', 'Hostname')}{field('monitor_interval', 'Monitoring interval (ms)')}
     <h3>Monitoring thresholds</h3>
