@@ -15,12 +15,13 @@ import (
 var version = "0.2.0"
 
 type Push struct {
-	AgentID  string   `json:"agentId"`
-	Hostname string   `json:"hostname"`
-	Arch     string   `json:"arch"`
-	Version  string   `json:"version"`
-	Metrics  Metrics  `json:"metrics"`
-	Smart    []string `json:"smart,omitempty"`
+	AgentID  string    `json:"agentId"`
+	Hostname string    `json:"hostname"`
+	Arch     string    `json:"arch"`
+	Version  string    `json:"version"`
+	Metrics  Metrics   `json:"metrics"`
+	Smart    []string  `json:"smart,omitempty"`
+	Security *Security `json:"security,omitempty"`
 }
 
 func main() {
@@ -38,7 +39,7 @@ func main() {
 	client := &http.Client{Timeout: 10 * time.Second}
 	for {
 		m := Collect()
-		p := Push{AgentID: *agentID, Hostname: hostname(), Arch: arch(), Version: version, Metrics: m, Smart: CollectSmart()}
+		p := Push{AgentID: *agentID, Hostname: hostname(), Arch: arch(), Version: version, Metrics: m, Smart: CollectSmart(), Security: CollectSecurityCached()}
 		if err := push(client, *backend, *token, p); err != nil {
 			fmt.Fprintln(os.Stderr, "pipulse-agent: push failed:", err)
 		}

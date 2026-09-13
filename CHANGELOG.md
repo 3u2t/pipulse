@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- Security page (`/security`): read-only hacker overview per node — SSH brute
+  force (10-min window, `th_ssh_warn/crit`), new logins and new listening ports
+  alert once, firewall/fail2ban/update/reboot status. Agent (root) reports SSH
+  log, `/proc/net/tcp*` ports, firewall, fail2ban, pending security updates.
 - Setup-Wizard (`/onboarding`): fragt beim ersten Start alles ab — Passwort,
   Server, Schwellen, Benachrichtigungen, System-Check — danach per Navigation,
   Strg+K oder Settings-Link erneut aufrufbar. Fixt nebenbei, dass gespeicherte

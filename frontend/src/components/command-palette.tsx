@@ -18,7 +18,7 @@ export function CommandPalette({ data }: { data: WsPayload | null }) {
   const items: { label: string; go: () => void }[] = [
     { label: 'Go: Dashboard', go: () => nav('/') }, { label: 'Go: System', go: () => nav('/system') },
     { label: 'Go: Docker', go: () => nav('/docker') }, { label: 'Go: Storage', go: () => nav('/storage') },
-    { label: 'Go: Network', go: () => nav('/network') }, { label: 'Go: Logs', go: () => nav('/logs') },
+    { label: 'Go: Network', go: () => nav('/network') }, { label: 'Go: Security', go: () => nav('/security') }, { label: 'Go: Logs', go: () => nav('/logs') },
     { label: 'Go: Alerts', go: () => nav('/alerts') }, { label: 'Go: Settings', go: () => nav('/settings') },
     { label: 'Setup: Onboarding wizard', go: () => nav('/onboarding') },
     { label: 'Refresh metrics', go: () => location.reload() },

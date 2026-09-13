@@ -43,6 +43,7 @@ export function Settings() {
     {field('th_mem_warn', 'RAM warning %')}{field('th_mem_crit', 'RAM critical %')}
     {field('th_disk_warn', 'Storage warning %')}{field('th_disk_crit', 'Storage critical %')}
     {field('th_drive_temp_warn', 'Drive temp warning °C')}{field('th_drive_temp_crit', 'Drive temp critical °C')}
+    {field('th_ssh_warn', 'SSH failed logins warning (per IP / 10 min)')}{field('th_ssh_crit', 'SSH failed logins critical (per IP / 10 min)')}
     {field('retention_days', 'Data retention (days)')}
     <p><button onClick={save}>Save settings</button></p>
     <Notifications />

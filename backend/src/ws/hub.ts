@@ -4,6 +4,7 @@ import type { MonitoringProvider } from '../providers/providers.js';
 import type { AppConfig } from '../config/config.js';
 import { listContainers } from '../docker/containers.js';
 import { evaluateAlerts, evaluateNodeAlerts, listAlerts, getThresholds } from '../alerts/alerts.js';
+import { evaluateSecurityAlerts } from '../security/security.js';
 import { collectSmart } from '../collectors/smart.js';
 import { agentStatus, agentNodes } from '../agent/agent.js';
 import { reconcileNotifications } from '../notify/notify.js';
@@ -36,6 +37,13 @@ export function startWs(server: Server, provider: MonitoringProvider, config: Ap
       const nodes = demo ? [] : agentNodes(intervalMs);
       evaluateAlerts(s, nodes.map((n) => ({ id: n.id, hostname: n.hostname, connected: demo ? true : n.connected })), smart.drives);
       if (!demo) evaluateNodeAlerts(nodes.filter((n) => n.connected));
+      if (!demo) {
+        try {
+          evaluateSecurityAlerts(nodes.filter((n) => n.connected).map((n) => n.id));
+        } catch (e) {
+          console.error('[pipulse] security evaluate failed:', (e as Error).message);
+        }
+      }
       const activeAlerts = listAlerts('active');
       void reconcileNotifications(activeAlerts, agent.hostname || 'pipulse', demo);
       const payload: WsPayload = {

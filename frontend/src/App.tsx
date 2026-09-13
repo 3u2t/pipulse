@@ -13,6 +13,7 @@ import { Storage } from './pages/Storage.js';
 import { Network } from './pages/Network.js';
 import { Logs } from './pages/Logs.js';
 import { Alerts } from './pages/Alerts.js';
+import { Security } from './pages/Security.js';
 import { Settings } from './pages/Settings.js';
 import { Onboarding } from './pages/Onboarding.js';
 import { Login } from './pages/Login.js';
@@ -70,6 +71,7 @@ function Shell() {
             <Route path="/network" element={<Network data={data} />} />
             <Route path="/logs" element={<Logs />} />
             <Route path="/alerts" element={<Alerts />} />
+            <Route path="/security" element={<Security />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/login" element={<Login />} />

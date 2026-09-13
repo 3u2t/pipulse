@@ -2,6 +2,8 @@ import { Router } from 'express';
 import type { AppConfig } from '../config/config.js';
 import { getDb } from '../db/db.js';
 import type { NodeInfo } from '../shared/types.js';
+import type { AgentSecurity } from '../security/security.js';
+import { ingestAgentSecurity } from '../security/security.js';
 
 export interface AgentState { connected: boolean; lastSeen: string | null; hostname: string | null; version: string | null; }
 
@@ -12,6 +14,7 @@ export interface AgentBody {
   version?: string;
   metrics?: { cpuUsage?: number; tempC?: number; memUsedKb?: number; memTotalKb?: number; load1?: number; uptimeSec?: number };
   smart?: unknown;
+  security?: AgentSecurity;
 }
 
 export interface AgentPush { ts: number; body: AgentBody }
@@ -89,6 +92,11 @@ export function agentRouter(config: AppConfig): Router {
     pushes.set(b.agentId, { ts: Date.now(), body: b });
     getDb().prepare("INSERT INTO agent(id,hostname,arch,version,last_seen) VALUES(?,?,?,?,datetime('now')) ON CONFLICT(id) DO UPDATE SET hostname=excluded.hostname, arch=excluded.arch, version=excluded.version, last_seen=datetime('now')")
       .run(b.agentId, String(b.hostname || ''), String(b.arch || ''), String(b.version || ''));
+    if (b.security && typeof b.security === 'object') {
+      try {
+        ingestAgentSecurity(b.agentId, String(b.hostname || b.agentId), b.security);
+      } catch { /* security ingest must never fail the push */ }
+    }
     res.json({ ok: true });
   });
   return r;

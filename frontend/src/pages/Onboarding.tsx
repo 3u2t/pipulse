@@ -25,6 +25,7 @@ const THRESHOLDS: [string, string][] = [
   ['th_mem_warn', 'RAM Warnung %'], ['th_mem_crit', 'RAM Kritisch %'],
   ['th_disk_warn', 'Speicher Warnung %'], ['th_disk_crit', 'Speicher Kritisch %'],
   ['th_drive_temp_warn', 'Festplatten-Temp Warnung °C'], ['th_drive_temp_crit', 'Festplatten-Temp Kritisch °C'],
+  ['th_ssh_warn', 'SSH-Fehlversuche Warnung (pro IP / 10 Min)'], ['th_ssh_crit', 'SSH-Fehlversuche Kritisch (pro IP / 10 Min)'],
 ];
 
 export function Onboarding() {

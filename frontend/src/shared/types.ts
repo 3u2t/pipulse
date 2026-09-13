@@ -231,3 +231,41 @@ export interface SmartResult {
   tool: 'ok' | 'missing' | 'denied';
   drives: SmartDrive[];
 }
+
+// Security signals reported by the host agent (root). Everything here is
+// first-seen or counted facts — no anomaly scoring, so alerts stay reliable.
+export interface SshAttempt {
+  ts: number;      // unix seconds
+  user: string;
+  ip: string;
+  ok: boolean;     // accepted vs failed login
+}
+
+export interface ListenPort {
+  proto: string;   // tcp | tcp6
+  port: number;
+  addr: string;
+  exposed: boolean; // bound to all interfaces (reachable from LAN/WAN)
+}
+
+export interface SshIpStat {
+  ip: string;
+  failed: number;   // failed attempts in the detection window
+  lastTs: number;   // unix seconds of the latest attempt
+  users: string[];
+}
+
+export interface SecurityStatus {
+  nodeId: string;
+  hostname: string;
+  connected: boolean;
+  firewall: string;          // ufw | nft | iptables | none | unknown
+  firewallDetail: string | null;
+  fail2ban: string;          // active | inactive | missing
+  secUpdates: number | null; // pending security updates, null = unknown
+  rebootRequired: boolean;
+  sshLog: boolean;           // an SSH log source was readable
+  ports: ListenPort[];
+  recent: SshAttempt[];      // latest attempts, newest first
+  bruteForce: SshIpStat[];   // IPs currently over the detection window
+}

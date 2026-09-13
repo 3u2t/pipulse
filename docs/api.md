@@ -14,6 +14,7 @@ Base: `http://<host>:8080`. Auth: `pipulse_session` cookie from `POST /api/auth/
 - `GET|PUT /api/settings` (allowlisted keys, incl. `setup_completed` for the onboarding wizard)
 - `GET /api/history?kind=host|container|iface&ref=&hours=1` — bucketed `{ points, bucketSec, total }`
 - `GET /api/nodes` — known agents with liveness + last reported metrics
+- `GET /api/security` — per-node security status (firewall, fail2ban, updates, ports, recent SSH, brute-force window)
 - `GET /api/notify` — notification config (passwords/tokens never returned) + delivery log
 - `PUT /api/notify` — webhook URL, Telegram bot token + chat ID, event selection, SMTP settings (validated)
 - `POST /api/notify/test` — `{ channel: 'webhook'|'telegram'|'email' }`, sends a test message

@@ -7,6 +7,7 @@ export interface Thresholds {
   memWarn: number; memCrit: number;
   diskWarn: number; diskCrit: number;
   driveTempWarn: number; driveTempCrit: number;
+  sshWarn: number; sshCrit: number;
 }
 
 export function getThresholds(): Thresholds {
@@ -21,10 +22,11 @@ export function getThresholds(): Thresholds {
     memWarn: g('th_mem_warn', 80), memCrit: g('th_mem_crit', 90),
     diskWarn: g('th_disk_warn', 80), diskCrit: g('th_disk_crit', 90),
     driveTempWarn: g('th_drive_temp_warn', 50), driveTempCrit: g('th_drive_temp_crit', 60),
+    sshWarn: g('th_ssh_warn', 5), sshCrit: g('th_ssh_crit', 20),
   };
 }
 
-function upsert(key: string, severity: AlertItem['severity'], component: string, message: string): void {
+export function upsert(key: string, severity: AlertItem['severity'], component: string, message: string): void {
   const db = getDb();
   const existing = db.prepare("SELECT id FROM alerts WHERE key=? AND status IN ('active','acknowledged')").get(key) as unknown as { id: number } | undefined;
   if (existing) {
@@ -34,7 +36,7 @@ function upsert(key: string, severity: AlertItem['severity'], component: string,
   db.prepare('INSERT INTO alerts(key,severity,component,message) VALUES(?,?,?,?)').run(key, severity, component, message);
 }
 
-function resolve(key: string): void {
+export function resolve(key: string): void {
   getDb().prepare("UPDATE alerts SET status='resolved', resolved_at=datetime('now') WHERE key=? AND status IN ('active','acknowledged')").run(key);
 }
 

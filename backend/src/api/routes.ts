@@ -8,6 +8,7 @@ import { collectSmart } from '../collectors/smart.js';
 import { listAlerts, getThresholds } from '../alerts/alerts.js';
 import { queryHistory } from '../db/history.js';
 import { agentNodes } from '../agent/agent.js';
+import { getSecurityStatus } from '../security/security.js';
 import { getNotifyConfig, validateNotifyInput, listNotifications, sendWebhook, sendEmail, sendTelegram } from '../notify/notify.js';
 
 export function apiRouter(provider: MonitoringProvider, _config: AppConfig): Router {
@@ -99,7 +100,7 @@ export function apiRouter(provider: MonitoringProvider, _config: AppConfig): Rou
     res.json({ settings: Object.fromEntries(rows.map((x) => [x.key, x.value])), thresholds: getThresholds() });
   });
   r.put('/settings', (req, res) => {
-    const allowed = new Set(['timezone', 'hostname', 'monitor_interval', 'th_cpu_warn', 'th_cpu_crit', 'th_temp_warn', 'th_temp_crit', 'th_mem_warn', 'th_mem_crit', 'th_disk_warn', 'th_disk_crit', 'th_drive_temp_warn', 'th_drive_temp_crit', 'retention_days', 'theme', 'setup_completed']);
+    const allowed = new Set(['timezone', 'hostname', 'monitor_interval', 'th_cpu_warn', 'th_cpu_crit', 'th_temp_warn', 'th_temp_crit', 'th_mem_warn', 'th_mem_crit', 'th_disk_warn', 'th_disk_crit', 'th_drive_temp_warn', 'th_drive_temp_crit', 'th_ssh_warn', 'th_ssh_crit', 'retention_days', 'theme', 'setup_completed']);
     const body = req.body as Record<string, unknown>;
     for (const [k, v] of Object.entries(body || {})) {
       if (allowed.has(k) && (typeof v === 'string' || typeof v === 'number')) {
@@ -118,6 +119,15 @@ export function apiRouter(provider: MonitoringProvider, _config: AppConfig): Rou
 
   r.get('/nodes', (_req, res) => {
     res.json(agentNodes(Number(getSetting('monitor_interval', '5000')) || 5000));
+  });
+
+  r.get('/security', (_req, res) => {
+    const intervalMs = Number(getSetting('monitor_interval', '5000')) || 5000;
+    const nodes = agentNodes(intervalMs);
+    const connected = new Set(nodes.filter((n) => n.connected).map((n) => n.id));
+    // Local host has no agent row; report its id as connected when demo is off
+    // so a directly-attached node_security row still shows as live.
+    res.json(getSecurityStatus(connected));
   });
 
   r.get('/notify', (_req, res) => {

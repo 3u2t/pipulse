@@ -62,6 +62,44 @@ export function openDb(dataDir: string): DatabaseSync {
       detail TEXT NOT NULL DEFAULT ''
     );
     CREATE INDEX IF NOT EXISTS idx_notifications_ts ON notifications(ts);
+    -- Security: raw SSH attempts (pruned to 24h), learned baselines so every
+    -- first-seen event alerts exactly once, latest per-node security snapshot.
+    CREATE TABLE IF NOT EXISTS ssh_events (
+      ts INTEGER NOT NULL,
+      node TEXT NOT NULL,
+      ip TEXT NOT NULL,
+      username TEXT NOT NULL DEFAULT '',
+      ok INTEGER NOT NULL DEFAULT 0,
+      UNIQUE(ts, node, ip, username, ok)
+    );
+    CREATE INDEX IF NOT EXISTS idx_ssh_events_ts ON ssh_events(ts);
+    CREATE TABLE IF NOT EXISTS known_ssh_ips (
+      node TEXT NOT NULL,
+      ip TEXT NOT NULL,
+      first_seen TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY(node, ip)
+    );
+    CREATE TABLE IF NOT EXISTS known_ports (
+      node TEXT NOT NULL,
+      proto TEXT NOT NULL,
+      port INTEGER NOT NULL,
+      addr TEXT NOT NULL DEFAULT '',
+      exposed INTEGER NOT NULL DEFAULT 0,
+      first_seen TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY(node, proto, port)
+    );
+    CREATE TABLE IF NOT EXISTS node_security (
+      node TEXT PRIMARY KEY,
+      hostname TEXT NOT NULL DEFAULT '',
+      firewall TEXT NOT NULL DEFAULT 'unknown',
+      firewall_detail TEXT NOT NULL DEFAULT '',
+      fail2ban TEXT NOT NULL DEFAULT 'missing',
+      sec_updates INTEGER,
+      reboot_required INTEGER NOT NULL DEFAULT 0,
+      ssh_log INTEGER NOT NULL DEFAULT 0,
+      ports TEXT NOT NULL DEFAULT '[]',
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
   return db;
 }
