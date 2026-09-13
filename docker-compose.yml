@@ -11,11 +11,11 @@ services:
       - /DATA/AppData/pipulse/config:/app/config
       - /DATA/AppData/pipulse/logs:/app/logs
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    # If the Docker page says "unavailable" while the socket is mounted, the
-    # container user can't read it. Least-privilege fix (do NOT use privileged):
-    # look up the gid with `stat -c %g /var/run/docker.sock` on the host and add:
-    #   group_add:
-    #     - "<that-gid>"
+    # Docker socket access (least privilege, do NOT use privileged): the gid
+    # must match the host socket (`stat -c %g /var/run/docker.sock` → 991 on
+    # this Pi). Without it the Docker page reports "unavailable".
+    group_add:
+      - "991"  # host docker gid
     # SMART (optional, container path only): map the drive(s). The recommended
     # path needs none of this — the host agent reads SMART as root instead.
     # See docs/smart.md. Never use --privileged for this.
